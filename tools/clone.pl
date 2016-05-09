@@ -120,9 +120,9 @@ use warnings;
 ## Settings
 #
 # The LVM volume group
-our $lvm_vg = "t0vg";
+our $lvm_vg = "XenVolG";
 # Clone network bridge name
-our $clone_bridge = "xenbr1";
+our $clone_bridge = "ovsbr1";
 # Vif script to pass to clone Xen config.
 # The backend specifies the name of the openvswitch domain.
 our $vif_script = "script=vif-openvswitch,backend=0";
@@ -168,6 +168,7 @@ sub clone {
     my $domconfig = `cat $config`;
 
     open(my $fh, '>', "/tmp/$clone.config") or die "Could not open file!";
+    open(my $fh1, '>', "/tmp/clone.res") or die "Could not open file!";
 
     while($domconfig =~ /([^\n]+)\n?/g){
 
@@ -176,38 +177,40 @@ sub clone {
             next;
         }
 
-        if(index($1, "vif") != -1) {
-            my @values = split(',', $1);
-            my $value;
-            my $count = 0;
-            foreach $value (@values) {
-                if(index($value, "bridge")!=-1 && index($value, "vif-bridge")==-1) {
-                    print $fh "bridge=$clone_bridge.$vlan,$vif_script";
-                } else {
-                    if(index($value, "script")==-1 && index($value, "backend")==-1) {
-                        print $fh "$value";
-                    } else {
-                        if($count == $#values) {
-                            print $fh "']";
-                        }
-                    }
-                }
-
-                if($count < $#values) {
-                    print $fh ",";
-                }
-                $count++;
-            }
-            print $fh "\n";
-            next;
-        }
+#        if(index($1, "vif") != -1) {
+#            my @values = split(',', $1);
+#            my $value;
+#            my $count = 0;
+#            foreach $value (@values) {
+#                if(index($value, "bridge")!=-1 && index($value, "vif-bridge")==-1) {
+#                    print $fh "bridge=$clone_bridge.$vlan,$vif_script";
+#                } else {
+#                    if(index($value, "script")==-1 && index($value, "backend")==-1) {
+#                        print $fh "$value";
+#                    } else {
+#                        if($count == $#values) {
+#                            print $fh "']";
+#                        }
+#                    }
+#                }
+#
+#                if($count < $#values) {
+#                    print $fh ",";
+#                }
+#                $count++;
+#            }
+#            print $fh "\n";
+#            next;
+#        }
 
         if(index($1, "disk") != -1) {
             my $disk = $1;
             my $pos = index($disk, $origin);
+            #print $fh1 "disk: $disk - pos $pos origin $origin\n";
             while ( $pos > -1 ) {
                 substr( $disk, $pos, length( $origin ), $clone );
                 $pos = index( $disk, $origin, $pos + length( $clone ));
+                #print $fh1 "disk: $disk - pos $pos clone $clone\n";
             }
             print $fh $disk;
             print $fh "\n";
@@ -228,12 +231,27 @@ sub clone {
        #print "Removing existing LVM snapshot of $clone\n";
         `$lvremove -f /dev/$lvm_vg/$clone 2>&1`;
     }
+    my $r;
 
-    `$lvcreate -s -n $clone -L20G /dev/$lvm_vg/$origin 2>&1`;
-    `$mkfifo /tmp/drakvuf_pipe_$clone 2>&1`;
-    `$xl save -c $origin /tmp/drakvuf_pipe_$clone 2>&1 | $xl restore -p -e /tmp/$clone.config /tmp/drakvuf_pipe_$clone 2>&1`;
+    $r = `$lvcreate -s -n $clone -L16G /dev/$lvm_vg/$origin 2>&1`;
+    print $fh1 "lvcreate: res: $r \n";
+    $r = `$mkfifo /tmp/drakvuf_pipe_$clone 2>&1`;
+    print $fh1 "mkfifo: res: $r \n";
+    print $fh1 "running $xl save -c $origin /tmp/drakvuf_pipe_$clone 2>&1 | $xl restore -p -e /tmp/$clone.config /tmp/drakvuf_pipe_$clone 2>&1 \n";
+    $r = `$xl save -c $origin /tmp/drakvuf_pipe_$clone 2>&1 | $xl restore -p -e /tmp/$clone.config /tmp/drakvuf_pipe_$clone 2>&1`;
+    print $fh1 " frm xl save: $r\n";
+    $r =  `xl list`;
+    print $fh1 "$r\n";
+    #`sleep 5`;
+    $r =  `xl list`;
+    print $fh1 "$r\n";
     my $cloneID = `$xl domid $clone`;
     chomp($cloneID);
+    print $fh1 "### clone: $cloneID \n";
+    $r = `sudo process-list $origin  | grep explorer`;
+    print $fh1 "explorer pid in $origin: $r \n";
+    $r = `sudo process-list $clone  | grep explorer`;
+    print $fh1 "explorer pid in $clone: $r \n";
     print "$cloneID";
 }
 
