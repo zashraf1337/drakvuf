@@ -1,5 +1,4 @@
-#********************IMPORTANT DRAKVUF LICENSE TERMS*********************#
-#                                                                        #
+#********************IMPORTANT DRAKVUF LICENSE TERMS*********************# #                                                                        #
 # DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel. #
 # Tamas K Lengyel is hereinafter referred to as the author.              #
 # This program is free software; you may redistribute and/or modify it   #
@@ -116,7 +115,12 @@ RUNFOLDER=$5
 RUNFILE=$6
 OUTPUTFOLDER=$7
 MD5=$(md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
-CMD="C:\\Users\\MrX\\Desktop\\test.exe"
+
+echo -n "   drakvuf.sh md5 of $RUNFOLDER/$RUNFILE got $MD5 - "
+echo `md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}'`
+#CMD="cmd.exe /k \"dir \"C:\\Users\\John Smith\\Desktop\\test.exe\" \""
+CMD="\"C:\\Users\\John Smith\\Desktop\\test.exe\""
+#CMD="\"C:\\Windows\\system32\\cmd.exe\""
 
 drakvuf -r $REKALL -d $DOMAIN -i $PID -e "$CMD" -D $OUTPUTFOLDER/$MD5 -o csv -t 60 1>$OUTPUTFOLDER/$MD5/drakvuf.log 2>&1
 
@@ -126,7 +130,7 @@ if [ $RET -eq 1 ]; then
    mv $RUNFOLDER/$RUNFILE $OUTPUTFOLDER/$MD5 1>/dev/null 2>&1
 fi
 
-TCPDUMPPID=$(ps aux | grep "tcpdump -i xenbr1.$VLAN" | grep -v grep | awk -F" " '{print $2}')
+TCPDUMPPID=$(ps aux | grep "tcpdump -i vif$DOMAIN.0-emu" | grep -v grep | awk -F" " '{print $2}')
 kill -9 $TCPDUMPPID 1>/dev/null 2>&1
 
 exit $RET;
