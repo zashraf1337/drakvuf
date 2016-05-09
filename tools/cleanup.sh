@@ -111,11 +111,11 @@ fi
 DONE=0
 LOOP=0
 DOMAIN=$1
-VLAN=$2
+VLAN=0
 
 xl pause $1 1>/dev/null 2>&1
 
-TCPDUMPPID=$(ps aux | grep "tcpdump -i xenbr1.$VLAN" | grep -v grep | awk -F" " '{print $2}')
+TCPDUMPPID=$(ps aux | grep "tcpdump -i vif$DOMAIN.0-emu" | grep -v grep | awk -F" " '{print $2}')
 kill -9 $TCPDUMPPID 1>/dev/null 2>&1
 
 while [ $DONE -lt 1 ]

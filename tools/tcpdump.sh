@@ -108,12 +108,13 @@ if [ $ARGC -le 3 ]; then
     exit 0;
 fi
 
-VLAN=$1
+VLAN=0
+DOMAIN=$1
 RUNFOLDER=$2
 RUNFILE=$3
 OUTPUTFOLDER=$4
 MD5=$(md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
 
-tcpdump -i xenbr1.$VLAN -n -U -w $OUTPUTFOLDER/$MD5/tcpdump.pcap 1>/dev/null 2>&1
+tcpdump -i vif$DOMAIN.0-emu -n -U -w $OUTPUTFOLDER/$MD5/tcpdump.pcap 1>/dev/null 2>&1
 
 exit $?;

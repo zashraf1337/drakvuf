@@ -170,7 +170,7 @@ make_clone(xen_interface_t *xen, domid_t *cloneID,
 gpointer tcpdump(gpointer data) {
     struct start_drakvuf *start = (struct start_drakvuf *)data;
     char *command = g_malloc0(snprintf(NULL, 0, TCPDUMP_CMD, tcpdump_script, start->threadid+1, run_folder, start->input, out_folder) + 1);
-    sprintf(command, TCPDUMP_CMD, tcpdump_script, start->threadid+1, run_folder, start->input, out_folder);
+    sprintf(command, TCPDUMP_CMD, tcpdump_script, start->cloneID, run_folder, start->input, out_folder);
     printf("** RUNNING COMMAND: %s\n", command);
     g_spawn_command_line_sync(command, NULL, NULL, NULL, NULL);
     free(command);
@@ -208,11 +208,17 @@ gpointer timer_thread(gpointer data) {
         }
 
         start->timer--;
+        //if ((start->timer % 5)==0)
+        //   printf("    timer:  %p %d\n", data, start->timer);
         sleep(1);
     }
 
     if ( !gotlock )
+    {
+        //printf("    timer calling cleanup:  %p %d\n", data, start->timer);
         cleanup(start->cloneID, start->threadid+1);
+    }
+    //printf("    timer exiting:  %p %d\n", data, start->timer);
 
     return NULL;
 }
@@ -381,9 +387,9 @@ int main(int argc, char** argv)
 
     pool = g_thread_pool_new(run_drakvuf, NULL, threads, TRUE, NULL);
 
-    char buffer[sizeof(struct inotify_event) + 16];
+    char buffer[sizeof(struct inotify_event) + NAME_MAX + 1];
     int fd = inotify_init();
-    int wd = inotify_add_watch( fd, in_folder, IN_CREATE );
+    int wd = inotify_add_watch( fd, in_folder, IN_CLOSE_WRITE );
 
     do {
         processed = 0;
@@ -411,7 +417,7 @@ int main(int argc, char** argv)
 
         if (!processed) {
             printf("Run folder is empty, waiting for file creation\n");
-            int l = read( fd, buffer, sizeof(struct inotify_event) + 16 );
+            int l = read( fd, buffer, sizeof(struct inotify_event) + NAME_MAX + 1 );
         }
     } while(1);
 
