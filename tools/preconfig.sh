@@ -117,7 +117,7 @@ RUNFILE=$6
 OUTPUTFOLDER=$7
 MD5=$(md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
 USER="John Smith"
-CMD="cmd.exe /k \"netsh interface ip set address name=\\\"Local Area Connection\\\" static 192.168.$VLAN.$DOMAIN 255.255.255.0 192.168.$VLAN.1 && netsh interface ip set dns name=\\\"Local Area Connection 2\\\" static 192.168.$VLAN.1 validate=no && ping -n 5 127.0.0.1 && powershell (new-object System.Net.WebClient).Downloadfile('http://192.168.$VLAN.1/$RUNFOLDER/$RUNFILE', 'C:\\Users\\$USER\\Desktop\\test.exe')\"" 
+CMD="cmd.exe /k \"netsh interface ip set address name=\\\"Local Area Connection\\\" static 192.168.$VLAN.$DOMAIN 255.255.255.0 192.168.$VLAN.1 && netsh interface ip set dns name=\\\"Local Area Connection\\\" static 192.168.$VLAN.1 validate=no && ping -n 5 127.0.0.1 && powershell (new-object System.Net.WebClient).Downloadfile('http://192.168.$VLAN.1/$RUNFOLDER/$RUNFILE', 'C:\\Users\\$USER\\Desktop\\test.exe')\"" 
 
 mkdir -p $OUTPUTFOLDER/$MD5 
 echo "   pre config created dir for MD5: $MD5 for $RUNFOLDER/$RUNFILE -- "
