@@ -333,7 +333,6 @@ restart:
 
     printf("[%i] ** DRAKVUF finished with RC %i. Timer: %i\n", start->threadid, rc, start->timer);
 
-    if ( start->timer ) {
         printf("[%i] Finished processing %s\n", start->threadid, start->input);
 
         g_mutex_unlock(&locks[start->threadid]);
@@ -341,9 +340,11 @@ restart:
         free(start->input);
         free(start->clone_name);
         free(start);
-        return;
-    } else
+    if ( !start->timer ) {
         cleanup(start->cloneID, start->threadid+1);
+        printf("[%i] %s failed to execute on %u because of a timeout, creating new clone\n", start->threadid, start->input, start->cloneID);
+    }
+    return;
 
 end:
     printf("[%i] %s failed to execute on %u because of a timeout, creating new clone\n", start->threadid, start->input, start->cloneID);
