@@ -248,10 +248,10 @@ sub clone {
     my $cloneID = `$xl domid $clone`;
     chomp($cloneID);
     print $fh1 "### clone: $cloneID \n";
-    $r = `sudo process-list $origin  | grep explorer`;
-    print $fh1 "explorer pid in $origin: $r \n";
-    $r = `sudo process-list $clone  | grep explorer`;
-    print $fh1 "explorer pid in $clone: $r \n";
+    #$r = `sudo process-list $origin  | grep explorer`;
+    #print $fh1 "explorer pid in $origin: $r \n";
+    #$r = `sudo process-list $clone  | grep explorer`;
+    #print $fh1 "explorer pid in $clone: $r \n";
     print "$cloneID";
 }
 
