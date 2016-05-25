@@ -229,6 +229,7 @@ static void prepare(char *sample, struct start_drakvuf *start)
         return;
 
     domid_t cloneID = 0;
+    int waitCount = 0;
     char *clone_name = NULL;
     int threadid;
 
@@ -238,11 +239,13 @@ static void prepare(char *sample, struct start_drakvuf *start)
         threadid = start->threadid;
 
     while(threadid<0) {
-        printf("Waiting for a thread to become available..\n");
+        if (waitCount % 60 == 0)
+           printf("Waiting for a thread to become available..\n");
         sleep(1);
+        waitCount++;
         threadid = find_thread();
     }
-
+    waitCount = 0;
     printf("Making clone %i to run %s in thread %u\n", threadid+1, sample ? sample : start->input, threadid);
     make_clone(xen, &cloneID, threadid+1, &clone_name);
 
