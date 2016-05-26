@@ -122,7 +122,7 @@ echo `md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}'`
 CMD="\"C:\\Users\\John Smith\\Desktop\\test.exe\""
 #CMD="\"C:\\Windows\\system32\\cmd.exe\""
 
-drakvuf -r $REKALL -d $DOMAIN -i $PID -e "$CMD" -D $OUTPUTFOLDER/$MD5 -o csv -t 180 1>$OUTPUTFOLDER/$MD5/drakvuf.log 2>&1
+drakvuf -r $REKALL -d $DOMAIN -i $PID -e "$CMD" -D $OUTPUTFOLDER/$MD5 -o csv -t 300 1>$OUTPUTFOLDER/$MD5/drakvuf.log 2>&1
 
 RET=$?
 
