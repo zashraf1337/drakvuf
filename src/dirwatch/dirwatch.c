@@ -337,7 +337,7 @@ restart:
 
     if ( !start->timer ) {
         cleanup(start->cloneID, start->threadid+1);
-        printf("[%i] %s failed to execute on %u because of a timeout, creating new clone\n", start->threadid, start->input, start->cloneID);
+        printf("[%i] [ERROR] %s failed to execute on %u because of a timeout, creating new clone\n", start->threadid, start->input, start->cloneID);
     }
     g_mutex_unlock(&locks[start->threadid]);
     g_mutex_clear(&start->timer_lock);
