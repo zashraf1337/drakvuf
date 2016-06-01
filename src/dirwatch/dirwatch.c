@@ -357,6 +357,8 @@ int main(int argc, char** argv)
     DIR *dir;
     struct dirent *ent;
     int i, ret = 1, processed = 0;
+    gint rc;
+    gboolean res;
 
     if(argc!=14) {
         printf("Not enough arguments: %i!\n", argc);
@@ -404,6 +406,13 @@ int main(int argc, char** argv)
                     continue;
 
                 char *command = g_malloc0(snprintf(NULL, 0, "mv %s/%s %s/%s", in_folder, ent->d_name, run_folder, ent->d_name) + 1);
+                sprintf(command, "lsof %s/%s", in_folder, ent->d_name);
+                res = g_spawn_command_line_sync(command, NULL, NULL, &rc, NULL);
+                if (!res || !rc) {
+                   free(command);
+                   continue; 
+                }
+                
                 sprintf(command, "mv %s/%s %s/%s", in_folder, ent->d_name, run_folder, ent->d_name);
                 printf("** MOVING FILE FOR PROCESSING: %s\n", command);
                 g_spawn_command_line_sync(command, NULL, NULL, NULL, NULL);
