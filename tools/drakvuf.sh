@@ -123,7 +123,8 @@ echo `md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}'`
 CMD="\"C:\\Users\\John Smith\\Desktop\\test.exe\""
 #CMD="\"C:\\Windows\\system32\\cmd.exe\""
 
-drakvuf -r $REKALL -d $DOMAIN -i $PID -e "$CMD" -D $OUTPUTFOLDER/$MD5 -o csv -t 300 1>$OUTPUTFOLDER/$MD5/drakvuf.log 2>&1
+# added -x ssdtmon as I was having problems running it
+drakvuf -x ssdtmon -r $REKALL -d $DOMAIN -i $PID -e "$CMD" -D $OUTPUTFOLDER/$MD5 -o csv -t 300 1>$OUTPUTFOLDER/$MD5/drakvuf.log 2>&1
 
 RET=$?
 
