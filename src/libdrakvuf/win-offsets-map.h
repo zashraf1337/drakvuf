@@ -102,208 +102,59 @@
  *                                                                         *
  ***************************************************************************/
 
-#define _GNU_SOURCE
-#include <stdio.h>
-#include <ctype.h>
-#include <string.h>
+#ifndef WIN_OFFSETS_MAP_H
+#define WIN_OFFSETS_MAP_H
 
-#include <libvmi/libvmi.h>
-#include <json-c/json.h>
-#include <glib.h>
+/*
+ * Map offset enums to actual structure+member or global variable/function names.
+ */
+static const char *offset_names[OFFSET_MAX][2] = {
+    [KIINITIALPCR] = { "KiInitialPCR", NULL },
+    [EPROCESS_PID] = { "_EPROCESS", "UniqueProcessId" },
+    [EPROCESS_PDBASE] = { "_KPROCESS", "DirectoryTableBase" },
+    [EPROCESS_PNAME] = { "_EPROCESS", "ImageFileName" },
+    [EPROCESS_TASKS] = { "_EPROCESS", "ActiveProcessLinks" },
+    [EPROCESS_PEB] = { "_EPROCESS", "Peb" },
+    [EPROCESS_OBJECTTABLE] = {"_EPROCESS", "ObjectTable" },
+    [EPROCESS_PCB] = { "_EPROCESS", "Pcb" },
+    [KPROCESS_HEADER] = { "_KPROCESS", "Header" },
+    [PEB_IMAGEBASADDRESS] = { "_PEB", "ImageBaseAddress" },
+    [PEB_LDR] = { "_PEB", "Ldr" },
+    [PEB_SESSIONID] = { "_PEB", "SessionId" },
+    [PEB_LDR_DATA_INLOADORDERMODULELIST] = {"_PEB_LDR_DATA", "InLoadOrderModuleList" },
+    [LDR_DATA_TABLE_ENTRY_DLLBASE] = { "_LDR_DATA_TABLE_ENTRY", "DllBase" },
+    [LDR_DATA_TABLE_ENTRY_SIZEOFIMAGE] = { "_LDR_DATA_TABLE_ENTRY", "SizeOfImage" },
+    [LDR_DATA_TABLE_ENTRY_BASEDLLNAME] = { "_LDR_DATA_TABLE_ENTRY", "BaseDllName" },
+    [FILE_OBJECT_DEVICEOBJECT] = {"_FILE_OBJECT", "DeviceObject" },
+    [FILE_OBJECT_READACCESS] = {"_FILE_OBJECT", "ReadAccess" },
+    [FILE_OBJECT_WRITEACCESS] = {"_FILE_OBJECT", "WriteAccess" },
+    [FILE_OBJECT_DELETEACCESS] = {"_FILE_OBJECT", "DeleteAccess" },
+    [FILE_OBJECT_FILENAME] = {"_FILE_OBJECT", "FileName"},
+    [HANDLE_TABLE_HANDLECOUNT] = {"_HANDLE_TABLE", "HandleCount" },
+    [KPCR_PRCB] = {"_KPCR", "Prcb" },
+    [KPCR_PRCBDATA] = {"_KPCR", "PrcbData" },
+    [KPRCB_CURRENTTHREAD] = { "_KPRCB", "CurrentThread" },
+    [KTHREAD_PROCESS] = {"_KTHREAD", "Process" },
+    [KTHREAD_INITIALSTACK] = {"_KTHREAD", "InitialStack"},
+    [KTHREAD_STACKLIMIT] = {"_KTHREAD", "StackLimit"},
+    [KTHREAD_TRAPFRAME] = {"_KTHREAD", "TrapFrame" },
+    [KTHREAD_APCSTATE] = {"_KTHREAD", "ApcState" },
+    [KTHREAD_APCQUEUEABLE] = {"_KTHREAD", "ApcQueueable"},
+    [KTHREAD_PREVIOUSMODE] = { "_KTHREAD", "PreviousMode" },
+    [KTHREAD_HEADER] = { "_KTHREAD", "Header" },
+    [KAPC_APCLISTENTRY] = {"_KAPC", "ApcListEntry" },
+    [KTRAP_FRAME_RIP] = {"_KTRAP_FRAME", "Rip" },
+    [ETHREAD_CID] = {"_ETHREAD", "Cid" },
+    [ETHREAD_TCB] = { "_ETHREAD", "Tcb" },
+    [CLIENT_ID_UNIQUETHREAD] = {"_CLIENT_ID", "UniqueThread" },
+    [OBJECT_HEADER_TYPEINDEX] = { "_OBJECT_HEADER", "TypeIndex" },
+    [OBJECT_HEADER_BODY] = { "_OBJECT_HEADER", "Body" },
+    [UNICODE_STRING_LENGTH] = {"_UNICODE_STRING", "Length" },
+    [UNICODE_STRING_BUFFER] = {"_UNICODE_STRING", "Buffer" },
+    [POOL_HEADER_BLOCKSIZE] = {"_POOL_HEADER", "BlockSize" },
+    [POOL_HEADER_POOLTYPE] = {"_POOL_HEADER", "PoolType" },
+    [POOL_HEADER_POOLTAG] = {"_POOL_HEADER", "PoolTag" },
+    [DISPATCHER_TYPE] = { "_DISPATCHER_HEADER",  "Type" },
+};
 
-#include "libdrakvuf.h"
-#include "private.h"
-
-status_t rekall_lookup(
-        const char *rekall_profile,
-        const char *symbol,
-        const char *subsymbol,
-        addr_t *rva,
-        addr_t *size)
-{
-    status_t ret = VMI_FAILURE;
-    if(!rekall_profile || !symbol) {
-        return ret;
-    }
-
-    json_object *root = json_object_from_file(rekall_profile);
-    if(!root) {
-        fprintf(stderr, "Rekall profile '%s' couldn't be opened!\n", rekall_profile);
-        return ret;
-    }
-
-    if(!subsymbol && !size) {
-        json_object *constants = NULL, *jsymbol = NULL;
-        if (!json_object_object_get_ex(root, "$CONSTANTS", &constants)) {
-            PRINT_DEBUG("Rekall profile: no $CONSTANTS section found\n");
-            goto exit;
-        }
-
-        if (!json_object_object_get_ex(constants, symbol, &jsymbol)){
-            PRINT_DEBUG("Rekall profile: symbol '%s' not found\n", symbol);
-            goto exit;
-        }
-
-        *rva = json_object_get_int64(jsymbol);
-
-        ret = VMI_SUCCESS;
-    } else {
-        json_object *structs = NULL, *jstruct = NULL, *jstruct2 = NULL, *jmember = NULL, *jvalue = NULL;
-        if (!json_object_object_get_ex(root, "$STRUCTS", &structs)) {
-            PRINT_DEBUG("Rekall profile: no $STRUCTS section found\n");
-            goto exit;
-        }
-        if (!json_object_object_get_ex(structs, symbol, &jstruct)) {
-            PRINT_DEBUG("Rekall profile: no '%s' found\n", symbol);
-            goto exit;
-        }
-
-        if (size) {
-            json_object *jsize = json_object_array_get_idx(jstruct, 0);
-            *size = json_object_get_int64(jsize);
-
-            ret = VMI_SUCCESS;
-            goto exit;
-        }
-
-        jstruct2 = json_object_array_get_idx(jstruct, 1);
-        if (!jstruct2) {
-            PRINT_DEBUG("Rekall profile: struct '%s' has no second element\n", symbol);
-            goto exit;
-        }
-
-        if (!json_object_object_get_ex(jstruct2, subsymbol, &jmember)) {
-            PRINT_DEBUG("Rekall profile: '%s' has no '%s' member\n", symbol, subsymbol);
-            goto exit;
-        }
-
-        jvalue = json_object_array_get_idx(jmember, 0);
-        if (!jvalue) {
-            PRINT_DEBUG("Rekall profile: '%s'.'%s' has no RVA defined\n", symbol, subsymbol);
-            goto exit;
-        }
-
-        *rva = json_object_get_int64(jvalue);
-
-        ret = VMI_SUCCESS;
-    }
-
-exit:
-    json_object_put(root);
-    return ret;
-}
-
-symbols_t* drakvuf_get_symbols_from_rekall(const char *rekall_profile)
-{
-
-    symbols_t *ret = g_malloc0(sizeof(symbols_t));;
-    json_object *root = json_object_from_file(rekall_profile);
-    if(!root) {
-        fprintf(stderr, "Rekall profile couldn't be opened!\n");
-        goto err_exit;
-    }
-
-    json_object *functions = NULL;
-    if (!json_object_object_get_ex(root, "$FUNCTIONS", &functions)) {
-        PRINT_DEBUG("Rekall profile: no $FUNCTIONS section found\n");
-        goto err_exit;
-    }
-
-    ret->count = json_object_object_length(functions);
-    ret->symbols = g_malloc0(sizeof(symbols_t) * ret->count);
-
-    struct json_object_iterator it = json_object_iter_begin(functions);
-    struct json_object_iterator itEnd = json_object_iter_end(functions);
-    uint32_t i=0;
-
-    while (!json_object_iter_equal(&it, &itEnd) && i < ret->count) {
-        ret->symbols[i].name = g_strdup(json_object_iter_peek_name(&it));
-        ret->symbols[i].rva = json_object_get_int64(json_object_iter_peek_value(&it));
-        i++;
-        json_object_iter_next(&it);
-    }
-
-    json_object_put(root);
-
-    return ret;
-
-err_exit:
-    if ( root )
-        json_object_put(root);
-
-    free(ret);
-    return NULL;
-}
-
-status_t drakvuf_get_function_rva(const char *rekall_profile, const char *function, addr_t *rva)
-{
-
-    json_object *root = json_object_from_file(rekall_profile);
-    if(!root) {
-        fprintf(stderr, "Rekall profile couldn't be opened!\n");
-        goto err_exit;
-    }
-
-    json_object *functions = NULL, *jsymbol = NULL;
-    if (!json_object_object_get_ex(root, "$FUNCTIONS", &functions)) {
-        PRINT_DEBUG("Rekall profile: no $FUNCTIONS section found\n");
-        goto err_exit;
-    }
-
-    if (!json_object_object_get_ex(functions, function, &jsymbol)) {
-        PRINT_DEBUG("Rekall profile: no '%s' found\n", function);
-        goto err_exit;
-    }
-
-    *rva = json_object_get_int64(jsymbol);
-    json_object_put(root);
-    return VMI_SUCCESS;
-
-err_exit:
-    if ( root )
-        json_object_put(root);
-
-    return VMI_FAILURE;
-}
-
-status_t drakvuf_get_constant_rva(const char *rekall_profile, const char *constant, addr_t *rva)
-{
-
-    json_object *root = json_object_from_file(rekall_profile);
-    if(!root) {
-        fprintf(stderr, "Rekall profile couldn't be opened!\n");
-        goto err_exit;
-    }
-
-    json_object *constants = NULL, *jsymbol = NULL;
-    if (!json_object_object_get_ex(root, "$CONSTANTS", &constants)) {
-        PRINT_DEBUG("Rekall profile: no $CONSTANTS section found\n");
-        goto err_exit;
-    }
-
-    if (!json_object_object_get_ex(constants, constant, &jsymbol)) {
-        PRINT_DEBUG("Rekall profile: no '%s' found\n", constant);
-        goto err_exit;
-    }
-
-    *rva = json_object_get_int64(jsymbol);
-    json_object_put(root);
-    return VMI_SUCCESS;
-
-err_exit:
-    if ( root )
-        json_object_put(root);
-
-    return VMI_FAILURE;
-}
-
-void drakvuf_free_symbols(symbols_t *symbols) {
-    uint32_t i;
-    if (!symbols) return;
-
-    for (i=0; i < symbols->count; i++) {
-        free((char*)symbols->symbols[i].name);
-    }
-    free(symbols->symbols);
-    free(symbols);
-}
+#endif

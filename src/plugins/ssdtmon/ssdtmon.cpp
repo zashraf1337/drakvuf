@@ -128,21 +128,17 @@ event_response_t write_cb(drakvuf_t drakvuf, drakvuf_trap_info_t* info) {
 
     if ( info->trap_pa > s->kiservicetable - 8 && info->trap_pa <= s->kiservicetable + s->ulongs * s->kiservicelimit + s->ulongs - 1 )
     {
-        char *procname = drakvuf_get_current_process_name(drakvuf, info->vcpu, info->regs);
-
         switch(s->format) {
         case OUTPUT_CSV:
-            printf("ssdtmon,%" PRIu32 ",0x%" PRIx64 ",%s,%li\n",
-                info->vcpu, info->regs->cr3, procname, (info->trap_pa - s->kiservicetable)/s->ulongs);
+            printf("ssdtmon,%" PRIu32 ",0x%" PRIx64 ",%s,%" PRIi64 ", %" PRIi64 "\n",
+                info->vcpu, info->regs->cr3, info->procname, info->sessionid, (info->trap_pa - s->kiservicetable)/s->ulongs);
             break;
         default:
         case OUTPUT_DEFAULT:
-            printf("[SSDTMON] VCPU:%" PRIu32 " CR3:0x%" PRIx64 ",%s Table index:%li\n",
-                   info->vcpu, info->regs->cr3, procname, (info->trap_pa - s->kiservicetable)/s->ulongs);
+            printf("[SSDTMON] VCPU:%" PRIu32 " CR3:0x%" PRIx64 ",%s SessionID:%" PRIi64" Table index:%" PRIi64 "\n",
+                   info->vcpu, info->regs->cr3, info->procname, info->sessionid, (info->trap_pa - s->kiservicetable)/s->ulongs);
             break;
         };
-
-        free(procname);
     }
     return 0;
 }
@@ -188,7 +184,7 @@ ssdtmon::ssdtmon(drakvuf_t drakvuf, const void *config, output_format_t output) 
 
     this->ulongs = (pm == VMI_PM_IA32E) ? 8 : 4;
 
-    PRINT_DEBUG("SSDT is at 0x%lx. Number of syscalls: %lu. Size: %lu\n",
+    PRINT_DEBUG("SSDT is at 0x%lx. Number of syscalls: %u. Size: %lu\n",
                 this->kiservicetable,
                 this->kiservicelimit,
                 this->ulongs*this->kiservicelimit);

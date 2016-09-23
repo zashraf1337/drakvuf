@@ -103,7 +103,7 @@
 #*************************************************************************#
 
 AC_PREREQ([2.60])
-AC_INIT([DRAKVUF], [0.3-m4_esyscmd_s([git describe --always])], [tamas@tklengyel.com], [], [http://drakvuf.com])
+AC_INIT([DRAKVUF], [0.4-m4_esyscmd_s([git describe --always])], [tamas@tklengyel.com], [], [http://drakvuf.com])
 AM_INIT_AUTOMAKE([1.10 no-define foreign subdir-objects])
 LT_INIT
 AC_CONFIG_HEADERS([config.h])
@@ -299,7 +299,8 @@ AC_CHECK_LIB(glib-2.0, [g_malloc0, g_tree_lookup], [], [AC_ERROR([glib-2.0 libra
 
 PKG_CHECK_MODULES([VMI], [libvmi >= 0.11], [], [AC_ERROR([LibVMI not found])])
 AC_CHECK_HEADERS([libvmi/events.h], [], [AC_ERROR([LibVMI doesn't have events support.])], [#include <libvmi/libvmi.h>])
-AC_CHECK_LIB(vmi, [vmi_register_event, vmi_step_event, vmi_read], [], [AC_ERROR([LibVMI doesn't have events support.])])
+AC_CHECK_LIB(vmi, [vmi_register_event], [], [AC_ERROR([LibVMI doesn't have required events support. Please update LibVMI!])])
+AC_CHECK_LIB(vmi, [vmi_events_version], [], [AC_ERROR([LibVMI doesn't have required events support. Please update LibVMI!])])
 
 AC_CHECK_LIB(json-c, json_object_get_int64,, [AC_ERROR([libjson-c-dev is missing])])
 AC_CHECK_HEADERS([json-c/json.h], [], [AC_ERROR([libjson-c-dev is missing])])
@@ -328,20 +329,23 @@ AC_CHECK_LIB([xentoollog], [xtl_logger_destroy])
 if test x$plugin_filedelete = xyes; then
     # Check for Python
     AM_PATH_PYTHON([2.7])
-    if test "xPYTHON" != "x"; then
+    if test "x$PYTHON" != "x"; then
         AC_DEFINE_UNQUOTED(PYTHON, "$PYTHON", "Python found")
+        AX_PYTHON_MODULE([pyvmi])
+
+        if test "x$HAVE_PYMOD_PYVMI" = "xyes"; then
+            AC_PATH_PROG(VOLATILITY, vol.py)
+
+            if test "x$VOLATILITY" != "x"; then
+                AC_DEFINE_UNQUOTED(VOLATILITY, "$VOLATILITY", "Volatility vol.py found")
+            else
+                plugin_filedelete="yes (log only)"
+            fi
+        else
+            plugin_filedelete="yes (log only)"
+        fi
     else
-        AC_ERROR([Python was not found on the system!])
-    fi
-
-    AX_PYTHON_MODULE([pyvmi], [fatal])
-
-    AC_PATH_PROG(VOLATILITY, vol.py)
-
-    if test "x$VOLATILITY" != "x"; then
-        AC_DEFINE_UNQUOTED(VOLATILITY, "$VOLATILITY", "Volatility vol.py found")
-    else
-        AC_ERROR([** Volatility vol.py was not found in your PATH!])
+        plugin_filedelete="yes (log only)"
     fi
 fi
 

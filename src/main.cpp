@@ -127,7 +127,7 @@ static inline void disable_plugin(char *optarg, bool *plugin_list) {
 }
 
 int main(int argc, char** argv) {
-    int c, i, rc = 0, timeout = 0;
+    int c, rc = 0, timeout = 0;
     char *inject_cmd = NULL;
     char *domain = NULL;
     char *rekall_profile = NULL;
@@ -135,7 +135,6 @@ int main(int argc, char** argv) {
     vmi_pid_t injection_pid = -1;
     uint32_t injection_thread = 0;
     struct sigaction act;
-    GThread *timeout_thread = NULL;
     output_format_t output = OUTPUT_DEFAULT;
     bool plugin_list[] = {[0 ... __DRAKVUF_PLUGIN_LIST_MAX-1] = 1};
     bool verbose = 0;
@@ -156,9 +155,11 @@ int main(int argc, char** argv) {
                "\t -I <injection thread>     The ThreadID in the process to hijack for injection (requires -i)\n"
                "\t -e <inject_exe>           The executable to start with injection\n"
                "\t -t <timeout>              Timeout (in seconds)\n"
-               "\t -D <file dump folder>     Folder where extracted files should be stored at\n"
                "\t -o <format>               Output format (default or csv)\n"
                "\t -x <plugin>               Don't activate the specified plugin\n"
+#ifdef VOLATILITY
+               "\t -D <file dump folder>     Folder where extracted files should be stored at\n"
+#endif
 #ifdef DRAKVUF_DEBUG
                "\t -v                        Turn on verbose (debug) output\n"
 #endif
@@ -248,7 +249,6 @@ int main(int argc, char** argv) {
     rc = 1;
 
 exit:
-    drakvuf->pause();
     delete drakvuf;
     return rc;
 }

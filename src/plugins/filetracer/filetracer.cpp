@@ -169,7 +169,6 @@ static event_response_t file_name_cb(drakvuf_t drakvuf, drakvuf_trap_info_t *inf
         //printf("File name @ 0x%lx. Length: %u\n", file_name, length);
 
         if (file_name && length > 0 && length < VMI_PS_4KB) {
-            char *procname = drakvuf_get_current_process_name(drakvuf, info->vcpu, info->regs);
             unicode_string_t str = { .contents = NULL };
             str.length = length;
             str.encoding = "UTF-16";
@@ -182,13 +181,13 @@ static event_response_t file_name_cb(drakvuf_t drakvuf, drakvuf_trap_info_t *inf
 
                 switch(f->format) {
                 case OUTPUT_CSV:
-                    printf("filetracer,%" PRIu32 ",0x%" PRIx64 ",%s,%s\n",
-                           info->vcpu, info->regs->cr3, procname, str2.contents);
+                    printf("filetracer,%" PRIu32 ",0x%" PRIx64 ",%s,%" PRIi64",%s\n",
+                           info->vcpu, info->regs->cr3, info->procname, info->sessionid, str2.contents);
                     break;
                 default:
                 case OUTPUT_DEFAULT:
-                    printf("[FILETRACER] VCPU:%" PRIu32 " CR3:0x%" PRIx64 ",%s %s\n",
-                           info->vcpu, info->regs->cr3, procname, str2.contents);
+                    printf("[FILETRACER] VCPU:%" PRIu32 " CR3:0x%" PRIx64 ",%s SessionID:%" PRIi64 " %s\n",
+                           info->vcpu, info->regs->cr3, info->procname, info->sessionid, str2.contents);
                     break;
                 };
 
@@ -196,7 +195,6 @@ static event_response_t file_name_cb(drakvuf_t drakvuf, drakvuf_trap_info_t *inf
             }
 
             free(str.contents);
-            free(procname);
             //printf("Requesting to free writetrap @ %p\n", info->trap);
             info->trap->data=f;
             drakvuf_remove_trap(drakvuf, info->trap, free_writetrap);
@@ -214,10 +212,8 @@ static event_response_t pool_alloc_return(drakvuf_t drakvuf, drakvuf_trap_info_t
     filetracer *f = s->f;
     addr_t obj_pa = vmi_pagetable_lookup(vmi, info->regs->cr3, info->regs->rax);
     bool file_alloc = 0;
-    addr_t ph_base = 0, thread = 0;
+    addr_t ph_base = 0;
     uint32_t block_size = 0;
-    uint32_t tag;
-    uint32_t aligned_file_size = f->file_object_size;
 
     if ( f->pm == VMI_PM_IA32E ) {
         struct pool_header_x64 ph;
@@ -354,6 +350,7 @@ filetracer::filetracer(drakvuf_t drakvuf, const void* config, output_format_t ou
     drakvuf_release_vmi(drakvuf);
     this->rettraps = g_hash_table_new(g_int64_hash, g_int64_equal);
     this->format = output;
+    this->writetraps = NULL;
 
     this->poolalloc.breakpoint.lookup_type = LOOKUP_PID;
     this->poolalloc.breakpoint.pid = 4;

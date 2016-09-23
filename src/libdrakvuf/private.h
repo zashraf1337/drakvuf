@@ -123,15 +123,17 @@
 
 extern bool verbose;
 
-#define PRINT_DEBUG(args...) \
+#define PRINT_DEBUG(...) \
     do { \
-        if(verbose) fprintf (stderr, args); \
+        if(verbose) fprintf (stderr, __VA_ARGS__); \
     } while (0)
 
 #else
-#define PRINT_DEBUG(args...) \
+#define PRINT_DEBUG(...) \
     do {} while(0)
 #endif
+
+#define UNUSED(x) (void)(x)
 
 struct drakvuf {
     char *dom_name;
@@ -149,9 +151,10 @@ struct drakvuf {
 
     vmi_event_t cr3_event;
     vmi_event_t interrupt_event;
+    vmi_event_t mem_event;
     vmi_event_t *step_event[16];
 
-    size_t offsets[OFFSET_MAX];
+    size_t *offsets;
 
     // Processing trap removals in trap callbacks
     // is problematic so we save all such requests
@@ -165,6 +168,7 @@ struct drakvuf {
     unsigned int vcpus;
     unsigned int init_memsize;
     unsigned int memsize;
+    addr_t kernbase;
 
     GHashTable *remapped_gfns; // Key: gfn
                                // val: remapped gfn
@@ -194,7 +198,7 @@ struct memaccess {
     addr_t gfn;
     addr_t pa;
     bool guard2;
-    vmi_event_t *memtrap;
+    vmi_mem_access_t access;
 } __attribute__ ((packed));
 
 struct wrapper {
@@ -222,6 +226,8 @@ struct remapped_gfn {
 struct memcb_pass {
     drakvuf_t drakvuf;
     uint64_t gfn;
+    char *procname;
+    int64_t sessionid;
     struct remapped_gfn *remapped_gfn;
     vmi_mem_access_t access;
     GSList *traps;

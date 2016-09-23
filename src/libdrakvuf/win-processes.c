@@ -109,25 +109,15 @@
 #include <sys/mman.h>
 #include <stdio.h>
 #include <glib.h>
+#include <limits.h>
 
 #include "private.h"
+#include "win-offsets.h"
 
 typedef enum dispatcher_object {
     DISPATCHER_PROCESS_OBJECT = 3,
     DISPATCHER_THREAD_OBJECT  = 6
 } dispatcher_object_t ;
-
-addr_t drakvuf_get_kernel_base(drakvuf_t drakvuf) {
-    reg_t fsgs;
-
-    if(vmi_get_page_mode(drakvuf->vmi) == VMI_PM_IA32E)  {
-        vmi_get_vcpureg(drakvuf->vmi, &fsgs, GS_BASE, 0);
-    } else {
-        vmi_get_vcpureg(drakvuf->vmi, &fsgs, FS_BASE, 0);
-    }
-
-    return fsgs - drakvuf->offsets[KIINITIALPCR];
-}
 
 addr_t drakvuf_get_current_thread(drakvuf_t drakvuf, uint64_t vcpu_id, const x86_registers_t *regs){
     vmi_instance_t vmi = drakvuf->vmi;
@@ -180,6 +170,38 @@ char *drakvuf_get_process_name(drakvuf_t drakvuf, addr_t eprocess_base) {
 
 char *drakvuf_get_current_process_name(drakvuf_t drakvuf, uint64_t vcpu_id, const x86_registers_t *regs) {
     return drakvuf_get_process_name(drakvuf, drakvuf_get_current_process(drakvuf, vcpu_id, regs));
+}
+
+int64_t drakvuf_get_process_sessionid(drakvuf_t drakvuf, addr_t eprocess_base) {
+
+    addr_t peb, sessionid;
+    vmi_instance_t vmi = drakvuf->vmi;
+    access_context_t ctx = {.translate_mechanism = VMI_TM_PROCESS_DTB};
+
+    if(!eprocess_base)
+        return -1;
+
+    if(VMI_FAILURE == vmi_read_addr_va(vmi, eprocess_base + drakvuf->offsets[EPROCESS_PEB], 0, &peb))
+        return -1;
+
+    if(VMI_FAILURE == vmi_read_addr_va(vmi, eprocess_base + drakvuf->offsets[EPROCESS_PDBASE], 0, &ctx.dtb))
+        return -1;
+
+    ctx.addr = peb + drakvuf->offsets[PEB_SESSIONID];
+    if ( VMI_FAILURE == vmi_read_addr(vmi, &ctx, &sessionid) )
+        return -1;
+
+#ifdef DRAKVUF_DEBUG
+    /* It should be safe to stash sessionid into a int64_t as it seldom goes above INT_MAX */
+    if ( sessionid > INT_MAX )
+        PRINT_DEBUG("The process at 0x%" PRIx64 " has a SessionID larger then INT_MAX!\n", eprocess_base);
+#endif
+
+    return (int64_t)sessionid;
+};
+
+int64_t drakvuf_get_current_process_sessionid(drakvuf_t drakvuf, uint64_t vcpu_id, const x86_registers_t *regs) {
+    return drakvuf_get_process_sessionid(drakvuf, drakvuf_get_current_process(drakvuf, vcpu_id, regs));
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -319,27 +341,35 @@ bool drakvuf_get_module_list(drakvuf_t drakvuf, addr_t eprocess_base, addr_t *mo
 }
 
 bool drakvuf_find_eprocess(drakvuf_t drakvuf, vmi_pid_t find_pid, const char *find_procname, addr_t *eprocess_addr) {
-    addr_t current_process = 0, next_list_entry = 0;
+    addr_t current_process, next_list_entry;
     vmi_instance_t vmi = drakvuf->vmi;
-    vmi_read_addr_ksym(vmi, "PsInitialSystemProcess", &current_process);
+
+    status_t status = vmi_read_addr_ksym(vmi, "PsInitialSystemProcess", &current_process);
+    if ( VMI_FAILURE == status )
+        return false;
 
     addr_t list_head = current_process + drakvuf->offsets[EPROCESS_TASKS];
     addr_t current_list_entry = list_head;
 
-    status_t status = vmi_read_addr_va(vmi, current_list_entry, 0,
-                                       &next_list_entry);
-    if (status == VMI_FAILURE) {
+    status = vmi_read_addr_va(vmi, current_list_entry, 0, &next_list_entry);
+    if ( VMI_FAILURE == status ) {
         PRINT_DEBUG("Failed to read next pointer at 0x%"PRIx64" before entering loop\n", current_list_entry);
         return false;
     }
 
     do {
-        vmi_pid_t pid = ~0;
+        vmi_pid_t pid;
         current_process = current_list_entry - drakvuf->offsets[EPROCESS_TASKS] ;
-        vmi_read_32_va(vmi, current_process + drakvuf->offsets[EPROCESS_PID], 0, (uint32_t*)&pid);
+
+        status = vmi_read_32_va(vmi, current_process + drakvuf->offsets[EPROCESS_PID], 0, (uint32_t*)&pid);
+        if ( VMI_FAILURE == status ) {
+            PRINT_DEBUG("Failed to read PID of process at %"PRIx64"\n", current_process);
+            return false;
+        }
+
         char *procname = vmi_read_str_va(vmi, current_process + drakvuf->offsets[EPROCESS_PNAME], 0);
 
-        if((pid != ~0 && find_pid != ~0 && pid == find_pid) || (find_procname && procname && !strcmp(procname, find_procname))) {
+        if((find_pid != ~0 && pid == find_pid) || (find_procname && procname && !strcmp(procname, find_procname))) {
             *eprocess_addr = current_process;
             free(procname);
             return true;
@@ -348,10 +378,10 @@ bool drakvuf_find_eprocess(drakvuf_t drakvuf, vmi_pid_t find_pid, const char *fi
         free(procname);
 
         current_list_entry = next_list_entry;
+
         status = vmi_read_addr_va(vmi, current_list_entry, 0, &next_list_entry);
-        if (status == VMI_FAILURE) {
-            PRINT_DEBUG("Failed to read next pointer in loop at %"PRIx64"\n",
-                    current_list_entry);
+        if ( VMI_FAILURE == status ) {
+            PRINT_DEBUG("Failed to read next pointer in loop at %"PRIx64"\n", current_list_entry);
             return false;
         }
 

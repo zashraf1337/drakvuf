@@ -117,8 +117,6 @@
 #include "libdrakvuf/libdrakvuf.h"
 #include "private.h"
 
-static uint8_t trap = 0xCC;
-
 struct injector {
     // Inputs:
     const char *target_proc;
@@ -282,7 +280,6 @@ struct kapc_64 {
 bool pass_inputs(struct injector *injector, drakvuf_trap_info_t *info) {
 
     vmi_instance_t vmi = injector->vmi;
-    status_t status;
     reg_t fsgs, rsp = info->regs->rsp;
     access_context_t ctx = {
         .translate_mechanism = VMI_TM_PROCESS_DTB,
@@ -624,9 +621,8 @@ event_response_t mem_callback(drakvuf_t drakvuf, drakvuf_trap_info_t *info) {
 event_response_t cr3_callback(drakvuf_t drakvuf, drakvuf_trap_info_t *info) {
 
     struct injector *injector = info->trap->data;
-    addr_t thread = 0, kpcrb_offset = 0, tid = 0, stack_base = 0, stack_limit = 0;
-    uint8_t apcqueueable;
-    reg_t fsgs = 0, cr3 = info->regs->cr3;
+    addr_t thread = 0;
+    reg_t cr3 = info->regs->cr3;
     status_t status;
 
     PRINT_DEBUG("CR3 changed to 0x%" PRIx64 "\n", info->regs->cr3);
@@ -664,11 +660,6 @@ event_response_t cr3_callback(drakvuf_t drakvuf, drakvuf_trap_info_t *info) {
      * sometimes fail for yet unknown reasons.
      */
      if (!injector->is32bit) {
-
-        access_context_t ctx = {
-            .translate_mechanism = VMI_TM_PROCESS_DTB,
-            .dtb = cr3,
-        };
 
         addr_t trapframe = 0;
         status = vmi_read_addr_va(injector->vmi,
@@ -711,21 +702,21 @@ event_response_t cr3_callback(drakvuf_t drakvuf, drakvuf_trap_info_t *info) {
         drakvuf_pause(drakvuf);
         while(loop) {
             page_info_t *page = loop->data;
-            if(page->vaddr < 0x80000000  && USER_SUPERVISOR(page->x86_pae.pte_value)) {
-                vmi_event_t *new_event = vmi_get_mem_event(injector->vmi, page->paddr);
-                if(!new_event) {
-                    drakvuf_trap_t *new_trap = g_malloc0(sizeof(drakvuf_trap_t));
-                    new_trap->type = MEMACCESS;
-                    new_trap->cb = mem_callback;
-                    new_trap->data = injector;
-                    new_trap->memaccess.access = VMI_MEMACCESS_X;
-                    new_trap->memaccess.type = POST;
-                    new_trap->memaccess.gfn = page->paddr >> 12;
+            if(page->vaddr < 0x80000000 && USER_SUPERVISOR(page->x86_pae.pte_value)) {
+                drakvuf_trap_t *new_trap = g_malloc0(sizeof(drakvuf_trap_t));
+                new_trap->type = MEMACCESS;
+                new_trap->cb = mem_callback;
+                new_trap->data = injector;
+                new_trap->memaccess.access = VMI_MEMACCESS_X;
+                new_trap->memaccess.type = POST;
+                new_trap->memaccess.gfn = page->paddr >> 12;
+                injector->memtraps = g_slist_prepend(injector->memtraps, new_trap);
+                if ( drakvuf_add_trap(injector->drakvuf, new_trap) )
                     injector->memtraps = g_slist_prepend(injector->memtraps, new_trap);
-                    drakvuf_add_trap(injector->drakvuf, new_trap);
-                }
+                else
+                    g_free(new_trap);
             }
-            free(page);
+            g_free(page);
             loop = loop->next;
         }
         g_slist_free(va_pages);
@@ -738,7 +729,6 @@ event_response_t cr3_callback(drakvuf_t drakvuf, drakvuf_trap_info_t *info) {
 
 event_response_t injector_int3_cb(drakvuf_t drakvuf, drakvuf_trap_info_t *info) {
     struct injector *injector = info->trap->data;
-    addr_t pa = info->trap_pa;
     reg_t cr3 = info->regs->cr3;
 
     vmi_pid_t pid = vmi_dtb_to_pid(injector->vmi, cr3);
@@ -896,7 +886,8 @@ int injector_start_app(drakvuf_t drakvuf, vmi_pid_t pid, uint32_t tid, const cha
     injector.cr3_event.reg = CR3;
     injector.cr3_event.cb = cr3_callback;
     injector.cr3_event.data = &injector;
-    drakvuf_add_trap(drakvuf, &injector.cr3_event);
+    if ( !drakvuf_add_trap(drakvuf, &injector.cr3_event) )
+        goto done;
 
     PRINT_DEBUG("Starting injection loop\n");
     drakvuf_loop(drakvuf);
