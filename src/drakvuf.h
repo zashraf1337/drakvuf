@@ -145,6 +145,9 @@ class drakvuf_c {
         void resume();
         int inject_cmd(vmi_pid_t injection_pid, uint32_t injection_tid, const char *inject_cmd);
         int start_plugins(const bool* plugin_list, const char *dump_folder);
+#ifdef VOLATILITY
+        void volatility_extract_process_tree(); 
+#endif
 };
 
 #endif

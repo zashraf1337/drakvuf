@@ -246,6 +246,7 @@ int main(int argc, char** argv) {
 
     /* Start the event listener */
     drakvuf->loop();
+    drakvuf->volatility_extract_process_tree();
     rc = 1;
 
 exit:

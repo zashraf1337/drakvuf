@@ -238,3 +238,36 @@ int drakvuf_c::inject_cmd(vmi_pid_t injection_pid, uint32_t injection_tid, const
         fprintf(stderr, "Process startup failed\n");
     return rc;
 }
+
+#ifdef VOLATILITY
+#define VOL_PSTREE "%s %s -l vmi://domid/%u --profile=%s pstree 2>&1 --output-file=vol_pstree.out"
+#define PROFILE32 "Win7SP1x86"
+#define PROFILE64 "Win7SP1x64"
+
+void drakvuf_c::volatility_extract_process_tree() {
+
+    const char* profile = NULL;
+
+    vmi_instance_t vmi = drakvuf_lock_and_get_vmi(this->drakvuf);
+
+    page_mode_t pm = vmi_get_page_mode(vmi);
+    uint32_t domid = vmi_get_vmid(vmi);
+
+    drakvuf_release_vmi(drakvuf);
+
+    if (pm == VMI_PM_IA32E)
+        profile = PROFILE64;
+    else
+        profile = PROFILE32;
+
+    char *command = (char *)g_malloc0(
+            snprintf(NULL, 0, VOL_PSTREE, PYTHON, VOLATILITY, domid,
+                     profile));
+    sprintf(command, VOL_PSTREE, PYTHON, VOLATILITY, domid, profile);
+            
+
+    g_spawn_command_line_sync(command, NULL, NULL, NULL, NULL);
+    g_free(command);
+}
+#endif
+
