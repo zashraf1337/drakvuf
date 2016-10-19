@@ -113,6 +113,7 @@
 
 enum offset {
     FILE_OBJECT_FILENAME,
+    FILE_OBJECT_WRITEACCESS,
     HANDLE_TABLE_HANDLECOUNT,
     OBJECT_HEADER_TYPEINDEX,
     OBJECT_HEADER_BODY,
@@ -123,6 +124,7 @@ enum offset {
 
 static const char *offset_names[__OFFSET_MAX][2] = {
     [FILE_OBJECT_FILENAME] = {"_FILE_OBJECT", "FileName"},
+    [FILE_OBJECT_WRITEACCESS] = {"_FILE_OBJECT", "WriteAccess"},
     [HANDLE_TABLE_HANDLECOUNT] = {"_HANDLE_TABLE", "HandleCount" },
     [OBJECT_HEADER_TYPEINDEX] = { "_OBJECT_HEADER", "TypeIndex" },
     [OBJECT_HEADER_BODY] = { "_OBJECT_HEADER", "Body" },
@@ -169,7 +171,7 @@ void volatility_extract_file(filedelete *f, addr_t file_object) {
  */
 static void grab_file_by_handle(filedelete *f, drakvuf_t drakvuf,
                                 vmi_instance_t vmi,
-                                drakvuf_trap_info_t *info, addr_t handle)
+                                drakvuf_trap_info_t *info, addr_t handle, bool ntCloseCall = false)
 {
     uint8_t type_index = 0;
     addr_t process=drakvuf_get_current_process(drakvuf, info->vcpu, info->regs);
@@ -197,6 +199,7 @@ static void grab_file_by_handle(filedelete *f, drakvuf_t drakvuf,
 
     addr_t file = obj + f->offsets[OBJECT_HEADER_BODY];
     addr_t filename = file + f->offsets[FILE_OBJECT_FILENAME];
+    uint8_t writeaccess = 0;
 
     uint16_t length = 0;
     addr_t buffer = 0;
@@ -209,7 +212,11 @@ static void grab_file_by_handle(filedelete *f, drakvuf_t drakvuf,
     if ( VMI_FAILURE == vmi_read_16(vmi, &ctx, &length) )
         return;
 
-    if (length && buffer) {
+    ctx.addr = file + f->offsets[FILE_OBJECT_WRITEACCESS];
+    if ( VMI_FAILURE == vmi_read_8(vmi, &ctx, &writeaccess) )
+        return;
+
+    if (length && buffer && (writeaccess || !ntCloseCall)) {
         unicode_string_t str;
         str.length = length;
         str.encoding = "UTF-16";
@@ -224,13 +231,13 @@ static void grab_file_by_handle(filedelete *f, drakvuf_t drakvuf,
         {
             switch(f->format) {
             case OUTPUT_CSV:
-                printf("filedelete,%" PRIu32 ",0x%" PRIx64 ",%s,%" PRIi64 ",\"%s\"\n",
-                       info->vcpu, info->regs->cr3, info->procname, info->sessionid, str2.contents);
+                printf("filedelete:%s,%" PRIu32 ",0x%" PRIx64 ",%s,%" PRIi64 ",\"%s\"\n",
+                       ntCloseCall ? "close" : "",info->vcpu, info->regs->cr3, info->procname, info->sessionid, str2.contents);
                 break;
             default:
             case OUTPUT_DEFAULT:
-                printf("[FILEDELETE] VCPU:%" PRIu32 " CR3:0x%" PRIx64 ",%s SessionID:%" PRIi64" \"%s\"\n",
-                       info->vcpu, info->regs->cr3, info->procname, info->sessionid, str2.contents);
+                printf("[FILEDELETE:%s] VCPU:%" PRIu32 " CR3:0x%" PRIx64 ",%s SessionID:%" PRIi64" \"%s\"\n",
+                       ntCloseCall ? "close" : "", info->vcpu, info->regs->cr3, info->procname, info->sessionid, str2.contents);
                 break;
             };
 
@@ -245,6 +252,31 @@ static void grab_file_by_handle(filedelete *f, drakvuf_t drakvuf,
         }
         g_free(str.contents);
     }
+}
+
+static event_response_t ntclose(drakvuf_t drakvuf, drakvuf_trap_info_t *info) {
+
+    filedelete *f = (filedelete *)info->trap->data;
+    vmi_instance_t vmi = drakvuf_lock_and_get_vmi(drakvuf);
+
+    access_context_t ctx;
+    ctx.translate_mechanism = VMI_TM_PROCESS_DTB;
+    ctx.dtb = info->regs->cr3;
+
+    reg_t handle;
+
+    if (f->pm == VMI_PM_IA32E) {
+        handle = info->regs->rcx;
+    } else {
+        ctx.addr = info->regs->rsp + sizeof(uint32_t);
+        if ( VMI_FAILURE == vmi_read_32(vmi, &ctx, (uint32_t*) &handle) )
+            goto done;
+    }
+    grab_file_by_handle(f, drakvuf, vmi, info, handle, true);
+
+done:
+    drakvuf_release_vmi(drakvuf);
+    return 0;
 }
 
 /*
@@ -322,16 +354,20 @@ filedelete::filedelete(drakvuf_t drakvuf, const void *config, output_format_t ou
         throw -1;
     if(VMI_FAILURE == drakvuf_get_function_rva(c->rekall_profile, "ZwSetInformationFile", &this->traps[1].breakpoint.rva))
         throw -1;
+    if(VMI_FAILURE == drakvuf_get_function_rva(c->rekall_profile, "NtClose", &this->traps[2].breakpoint.rva))
+        throw -1;
+    if(VMI_FAILURE == drakvuf_get_function_rva(c->rekall_profile, "ZwClose", &this->traps[3].breakpoint.rva))
+        throw -1;
 
     this->traps[0].name = "NtSetInformationFile";
     this->traps[0].cb = setinformation;
     this->traps[1].name = "ZwSetInformationFile";
     this->traps[1].cb = setinformation;
-    /* TODO
-    traps[2].u2.rva = drakvuf_get_function_rva(c->rekall_profile, "NtDeleteFile");
-    traps[2].name = "NtDeleteFile";
-    traps[3].u2.rva = drakvuf_get_function_rva(c->rekall_profile, "ZwDeleteFile");
-    traps[3].name = "ZwDeleteFile";*/
+    
+    traps[2].name = "NtClose";
+    this->traps[2].cb = ntclose;
+    traps[3].name = "ZwClose";
+    this->traps[3].cb = ntclose;
 
     this->offsets = (size_t*)malloc(sizeof(size_t)*__OFFSET_MAX);
 
@@ -346,8 +382,8 @@ filedelete::filedelete(drakvuf_t drakvuf, const void *config, output_format_t ou
     if ( !drakvuf_add_trap(drakvuf, &traps[0]) )
         throw -1;
     //drakvuf_add_trap(drakvuf, &traps[1]);
-    //drakvuf_add_trap(drakvuf, &traps[2]);
-    //drakvuf_add_trap(drakvuf, &traps[3]);
+    drakvuf_add_trap(drakvuf, &traps[2]);
+    drakvuf_add_trap(drakvuf, &traps[3]);
 }
 
 filedelete::~filedelete() {
