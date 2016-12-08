@@ -1,0 +1,6 @@
+[submodule "cuckoo-modified"]
+	path = cuckoo-modified
+	url = https://github.com/zashraf1337/cuckoo-modified.git
+[submodule "cuckoomon-modified"]
+	path = cuckoomon-modified
+	url = https://github.com/zashraf1337/cuckoomon-modified.git
