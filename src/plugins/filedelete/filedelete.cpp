@@ -133,11 +133,11 @@ static const char *offset_names[__OFFSET_MAX][2] = {
 };
 
 #ifdef VOLATILITY
-#define VOL_DUMPFILES "%s %s -l vmi://domid/%u --profile=%s -Q 0x%lx -D %s -n dumpfiles 2>&1"
+#define VOL_DUMPFILES "%s %s -l vmi://domid/%u --profile=%s -Q 0x%lx -D %s -n -S %s/summaryFile-%c-%s-%lx dumpfiles 2>&1"
 #define PROFILE32 "Win7SP1x86"
 #define PROFILE64 "Win7SP1x64"
 
-void volatility_extract_file(filedelete *f, addr_t file_object) {
+void volatility_extract_file(filedelete *f, addr_t file_object, const char* filename = NULL, char reason = '\0') {
 
     const char* profile = NULL;
     if (f->pm == VMI_PM_IA32E)
@@ -147,11 +147,12 @@ void volatility_extract_file(filedelete *f, addr_t file_object) {
 
     char *command = (char *)g_malloc0(
             snprintf(NULL, 0, VOL_DUMPFILES, PYTHON, VOLATILITY, f->domid,
-                     profile, file_object, f->dump_folder
+                     profile, file_object, f->dump_folder, f->dump_folder, reason, filename, file_object 
                     )+ 1);
     sprintf(command, VOL_DUMPFILES, PYTHON, VOLATILITY, f->domid, profile,
-            file_object, f->dump_folder);
+            file_object, f->dump_folder, f->dump_folder, reason, filename, file_object);
 
+    fprintf(stderr, "dumping file:%s, %lx %s\n", filename, file_object, command);
     g_spawn_command_line_sync(command, NULL, NULL, NULL, NULL);
     g_free(command);
 }
@@ -244,7 +245,8 @@ static void grab_file_by_handle(filedelete *f, drakvuf_t drakvuf,
 #ifdef VOLATILITY
             if (f->dump_folder) {
                 addr_t file_pa = vmi_pagetable_lookup(vmi, info->regs->cr3, file);
-                volatility_extract_file(f, file_pa);
+                fprintf(stderr, "dumping file:%s, %lx\n", str2.contents, file_pa);
+                volatility_extract_file(f, file_pa, strrchr((char*)str2.contents, '\\') ? strrchr((char*)str2.contents, '\\') + 1 : (char*)str2.contents, ntCloseCall ? 'C' : 'D');
             }
 #endif
 

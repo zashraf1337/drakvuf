@@ -317,7 +317,7 @@ restart:
     sleep(30);
     xc_domain_pause(xen->xc, start->cloneID);
 
-    start->timer = 400;
+    start->timer = 900;
     g_mutex_lock(&start->timer_lock);
     timer = g_thread_new("timer", timer_thread, start);
 

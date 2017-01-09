@@ -113,8 +113,8 @@ DOMAIN=$1
 RUNFOLDER=$2
 RUNFILE=$3
 OUTPUTFOLDER=$4
-MD5=$(md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
+SHA256`=$(sha256sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
 
-tcpdump -i vif$DOMAIN.0-emu -n -U -w $OUTPUTFOLDER/$MD5/tcpdump.pcap 1>/dev/null 2>&1
+tcpdump -i vif$DOMAIN.0-emu -n -U -w $OUTPUTFOLDER/$SHA256/tcpdump.pcap 1>/dev/null 2>&1
 
 exit $?;

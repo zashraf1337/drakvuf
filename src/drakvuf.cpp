@@ -247,6 +247,7 @@ int drakvuf_c::inject_cmd(vmi_pid_t injection_pid, uint32_t injection_tid, const
 void drakvuf_c::volatility_extract_process_tree() {
 
     const char* profile = NULL;
+    fprintf(stderr, "dumping Process tree\n");
 
     vmi_instance_t vmi = drakvuf_lock_and_get_vmi(this->drakvuf);
 

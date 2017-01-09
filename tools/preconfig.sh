@@ -115,12 +115,12 @@ VLAN=$(expr $4 + 1)
 RUNFOLDER=$5
 RUNFILE=$6
 OUTPUTFOLDER=$7
-MD5=$(md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
+SHA256=$(sha256sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
 USER="John Smith"
 CMD="cmd.exe /c \"netsh interface ip set address name=\\\"Local Area Connection 2\\\" static 192.168.0.$VLAN 255.255.255.0 192.168.0.1 && netsh interface ip set dns name=\\\"Local Area Connection 2\\\" static 192.168.0.1 validate=no && ping -n 5 127.0.0.1 && powershell (new-object System.Net.WebClient).Downloadfile('http://192.168.0.1/$RUNFOLDER/$RUNFILE', 'C:\\Users\\$USER\\Desktop\\test.exe')\"" 
 
-mkdir -p $OUTPUTFOLDER/$MD5 
-echo "   pre config created dir for MD5: $MD5 for $RUNFOLDER/$RUNFILE -- "
-injector $REKALL $DOMAIN $PID "$CMD" 1>$OUTPUTFOLDER/$MD5/preconfig.log 2>&1
+mkdir -p $OUTPUTFOLDER/$SHA256 
+echo "   pre config created dir for SHA256: $SHA256 for $RUNFOLDER/$RUNFILE -- "
+injector $REKALL $DOMAIN $PID "$CMD" 1>$OUTPUTFOLDER/$SHA256/preconfig.log 2>&1
 
 exit $?;
