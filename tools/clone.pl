@@ -2,7 +2,7 @@
 #
 #********************IMPORTANT DRAKVUF LICENSE TERMS*********************#
 #                                                                        #
-# DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel. #
+# DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                 #
 # Tamas K Lengyel is hereinafter referred to as the author.              #
 # This program is free software; you may redistribute and/or modify it   #
 # under the terms of the GNU General Public License as published by the  #
@@ -248,10 +248,17 @@ sub clone {
     my $cloneID = `$xl domid $clone`;
     chomp($cloneID);
     print $fh1 "### clone: $cloneID \n";
+<<<<<<< HEAD
     $r = `sudo process-list $origin  | grep explorer`;
     print $fh1 "explorer pid in $origin: $r \n";
     $r = `sudo process-list $clone  | grep explorer`;
     print $fh1 "explorer pid in $clone: $r \n";
+=======
+    #$r = `sudo process-list $origin  | grep explorer`;
+    #print $fh1 "explorer pid in $origin: $r \n";
+    #$r = `sudo process-list $clone  | grep explorer`;
+    #print $fh1 "explorer pid in $clone: $r \n";
+>>>>>>> 85d378577801ac8cb7c634593f9cb81373fd34b6
     print "$cloneID";
 }
 

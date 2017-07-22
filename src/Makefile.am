@@ -1,6 +1,6 @@
 #********************IMPORTANT DRAKVUF LICENSE TERMS**********************#
 #                                                                         #
-# DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  #
+# DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  #
 # Tamas K Lengyel is hereinafter referred to as the author.               #
 # This program is free software; you may redistribute and/or modify it    #
 # under the terms of the GNU General Public License as published by the   #
@@ -100,11 +100,11 @@
 # DRAKVUF, and also available from                                        #
 # https://github.com/tklengyel/drakvuf/COPYING)                           #
 #                                                                         #
-#*************************************************************************# 
+#*************************************************************************#
 
 bin_PROGRAMS = drakvuf xen_memclone injector
 
-SUBDIRS = xen_helper libdrakvuf plugins dirwatch
+SUBDIRS = xen_helper libdrakvuf libinjector plugins dirwatch
 
 drakvuf_SOURCES = main.cpp drakvuf.cpp
 xen_memclone_SOURCES  = xen_memclone.c
@@ -127,10 +127,10 @@ endif
 
 # Note that -pg is incompatible with HARDENING
 if DEBUG
-AM_CFLAGS += -DDRAKVUF_DEBUG -Wall -Wextra -Wno-override-init -Wno-strict-aliasing -g -ggdb3
-AM_CFLAGS += -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-unused-variable
-AM_CPPFLAGS += -DDRAKVUF_DEBUG -Wall -Wextra -Wno-strict-aliasing -g -ggdb3
-AM_CPPFLAGS += -Wno-unused-parameter -Wno-unused-variable
+AM_CFLAGS += -DDRAKVUF_DEBUG -Werror -Wall -Wextra -g -ggdb3
+AM_CFLAGS += -Wno-missing-field-initializers
+AM_CPPFLAGS += -DDRAKVUF_DEBUG -Werror -Wall -Wextra -g -ggdb3
+AM_CPPFLAGS += -Wno-missing-field-initializers
 if !HARDENING
 AM_CFLAGS += -pg
 AM_CPPFLAGS += -pg
@@ -140,11 +140,13 @@ endif
 drakvuf_LDADD = libdrakvuf/libdrakvuf.la
 drakvuf_LDADD += xen_helper/libxenhelper.la
 drakvuf_LDADD += plugins/libdrakvufplugins.la
+drakvuf_LDADD += libinjector/libinjector.la
 
 if HARDENING
 drakvuf_LDADD += $(HARDEN_LDFLAGS)
 endif
 
 injector_LDADD = libdrakvuf/libdrakvuf.la
+injector_LDADD += libinjector/libinjector.la
 
 xen_memclone_LDADD = xen_helper/libxenhelper.la

@@ -1,12 +1,12 @@
 #********************IMPORTANT DRAKVUF LICENSE TERMS**********************#
 #                                                                         #
-# DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  #
+# DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  #
 # Tamas K Lengyel is hereinafter referred to as the author.               #
 # This program is free software; you may redistribute and/or modify it    #
 # under the terms of the GNU General Public License as published by the   #
 # Free Software Foundation; Version 2 ("GPL"), BUT ONLY WITH ALL OF THE   #
-# CLARIFICATIONS AND EXCEPTIONS DESCRIBED HEREIN.  This guarantees your   # 
-# right to use, modify, and redistribute this software under certain      # 
+# CLARIFICATIONS AND EXCEPTIONS DESCRIBED HEREIN.  This guarantees your   #
+# right to use, modify, and redistribute this software under certain      #
 # conditions.  If you wish to embed DRAKVUF technology into proprietary   #
 # software, alternative licenses can be aquired from the author.          #
 #                                                                         #
@@ -103,7 +103,7 @@
 #*************************************************************************#
 
 AC_PREREQ([2.60])
-AC_INIT([DRAKVUF], [0.3-m4_esyscmd_s([git describe --always])], [tamas@tklengyel.com], [], [http://drakvuf.com])
+AC_INIT([DRAKVUF], [0.4-m4_esyscmd_s([git describe --always])], [tamas@tklengyel.com], [], [http://drakvuf.com])
 AM_INIT_AUTOMAKE([1.10 no-define foreign subdir-objects])
 LT_INIT
 AC_CONFIG_HEADERS([config.h])
@@ -123,7 +123,7 @@ AC_ARG_ENABLE([plugin_syscalls],
   [AS_HELP_STRING([--disable-plugin-syscalls],
     [Enable the syscall tracing plugin @<:@yes@:>@])],
   [plugin_syscalls="$enableval"],
-  [plugin_syscalls="yes"])   
+  [plugin_syscalls="yes"])
 AM_CONDITIONAL([PLUGIN_SYSCALLS], [test x$plugin_syscalls = xyes])
 if test x$plugin_syscalls = xyes; then
   AC_DEFINE_UNQUOTED(ENABLE_PLUGIN_SYSCALLS, 1, "")
@@ -133,7 +133,7 @@ AC_ARG_ENABLE([plugin_poolmon],
   [AS_HELP_STRING([--disable-plugin-poolmon],
     [Enable the kernel heap allocation tracer @<:@yes@:>@])],
   [plugin_poolmon="$enableval"],
-  [plugin_poolmon="yes"])   
+  [plugin_poolmon="yes"])
 AM_CONDITIONAL([PLUGIN_POOLMON], [test x$plugin_poolmon = xyes])
 if test x$plugin_poolmon = xyes; then
   AC_DEFINE_UNQUOTED(ENABLE_PLUGIN_POOLMON, 1, "")
@@ -143,7 +143,7 @@ AC_ARG_ENABLE([plugin_filetracer],
   [AS_HELP_STRING([--disable-plugin-filetracer],
     [Enable the file tracer plugin @<:@yes@:>@])],
   [plugin_filetracer="$enableval"],
-  [plugin_filetracer="yes"])   
+  [plugin_filetracer="yes"])
 AM_CONDITIONAL([PLUGIN_FILETRACER], [test x$plugin_filetracer = xyes])
 if test x$plugin_filetracer = xyes; then
   AC_DEFINE_UNQUOTED(ENABLE_PLUGIN_FILETRACER, 1, "")
@@ -153,7 +153,7 @@ AC_ARG_ENABLE([plugin_filedelete],
   [AS_HELP_STRING([--disable-plugin-filedelete],
     [Enable the file delete catching plugin @<:@yes@:>@])],
   [plugin_filedelete="$enableval"],
-  [plugin_filedelete="yes"])   
+  [plugin_filedelete="yes"])
 AM_CONDITIONAL([PLUGIN_FILEDELETE], [test x$plugin_filedelete = xyes])
 if test x$plugin_filedelete = xyes; then
   AC_DEFINE_UNQUOTED(ENABLE_PLUGIN_FILEDELETE, 1, "")
@@ -163,7 +163,7 @@ AC_ARG_ENABLE([plugin_objmon],
   [AS_HELP_STRING([--disable-plugin-objmon],
     [Enable the ObCreateObject watching plugin @<:@yes@:>@])],
   [plugin_objmon="$enableval"],
-  [plugin_objmon="yes"])   
+  [plugin_objmon="yes"])
 AM_CONDITIONAL([PLUGIN_OBJMON], [test x$plugin_objmon = xyes])
 if test x$plugin_objmon = xyes; then
   AC_DEFINE_UNQUOTED(ENABLE_PLUGIN_OBJMON, 1, "")
@@ -173,10 +173,20 @@ AC_ARG_ENABLE([plugin_exmon],
   [AS_HELP_STRING([--disable-plugin-exmon],
     [Enable the KiDispatchException watching plugin @<:@yes@:>@])],
   [plugin_exmon="$enableval"],
-  [plugin_exmon="yes"])   
+  [plugin_exmon="yes"])
 AM_CONDITIONAL([PLUGIN_EXMON], [test x$plugin_exmon = xyes])
 if test x$plugin_exmon = xyes; then
   AC_DEFINE_UNQUOTED(ENABLE_PLUGIN_EXMON, 1, "")
+fi
+
+AC_ARG_ENABLE([plugin_ssdtmon],
+  [AS_HELP_STRING([--disable-plugin-ssdtmon],
+    [Enable the KiServiceTable watching plugin @<:@yes@:>@])],
+  [plugin_ssdtmon="$enableval"],
+  [plugin_ssdtmon="yes"])
+AM_CONDITIONAL([PLUGIN_SSDTMON], [test x$plugin_ssdtmon = xyes])
+if test x$plugin_ssdtmon = xyes; then
+  AC_DEFINE_UNQUOTED(ENABLE_PLUGIN_SSDTMON, 1, "")
 fi
 
 #####################################################
@@ -186,13 +196,13 @@ AC_ARG_ENABLE([hardening],
     [Enable compiler and linker options to frustrate memory corruption exploits @<:@yes@:>@])],
   [hardening="$enableval"],
   [hardening="yes"])
-AM_CONDITIONAL([HARDENING], [test x$hardening = xyes])  
-  
+AM_CONDITIONAL([HARDENING], [test x$hardening = xyes])
+
 AC_ARG_ENABLE([debug],
   [AS_HELP_STRING([--enable-debug],
     [Enable verbose debug output to be compiled @<:@no@:>@])],
   [debug="$enableval"],
-  [debug="no"])   
+  [debug="no"])
 AM_CONDITIONAL([DEBUG], [test x$debug = xyes])
 
 #####################################################
@@ -275,6 +285,13 @@ AC_STRUCT_TM
 # Checks for library functions.
 AC_FUNC_MALLOC
 
+# Make sure we get standard PRI... definitions.
+AH_VERBATIM([__STDC_FORMAT_MACROS],
+            [/* C99 says: define this to get the PRI... macros from stdint.h */
+#ifndef __STDC_FORMAT_MACROS
+#define __STDC_FORMAT_MACROS 1
+#endif])
+
 AC_CHECK_LIB(pthread, pthread_create, [], [AC_ERROR([Pthread library is not functional!])])
 
 PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.28], [], [AC_ERROR([glib-2.0 (version 2.28+) has to be installed!])])
@@ -282,7 +299,8 @@ AC_CHECK_LIB(glib-2.0, [g_malloc0, g_tree_lookup], [], [AC_ERROR([glib-2.0 libra
 
 PKG_CHECK_MODULES([VMI], [libvmi >= 0.11], [], [AC_ERROR([LibVMI not found])])
 AC_CHECK_HEADERS([libvmi/events.h], [], [AC_ERROR([LibVMI doesn't have events support.])], [#include <libvmi/libvmi.h>])
-AC_CHECK_LIB(vmi, [vmi_register_event, vmi_step_event, vmi_read], [], [AC_ERROR([LibVMI doesn't have events support.])])
+AC_CHECK_LIB(vmi, [vmi_register_event], [], [AC_ERROR([LibVMI doesn't have required events support. Please update LibVMI!])])
+AC_CHECK_LIB(vmi, [vmi_events_version], [], [AC_ERROR([LibVMI doesn't have required events support. Please update LibVMI!])])
 
 AC_CHECK_LIB(json-c, json_object_get_int64,, [AC_ERROR([libjson-c-dev is missing])])
 AC_CHECK_HEADERS([json-c/json.h], [], [AC_ERROR([libjson-c-dev is missing])])
@@ -293,10 +311,15 @@ AC_CHECK_LIB(xenlight, libxl_name_to_domid, [], [AC_ERROR([Xenlight does not hav
 #AC_CHECK_HEADER([xenstore.h])
 #AC_CHECK_LIB(xenstore, [xc_read, xs_transaction_start], [], [AC_ERROR([Xenstore not found!])])
 
-# Check for Xenctrl and memory sharing
+# Check for Xenctrl
 AC_CHECK_HEADERS([xenctrl.h], [], [AC_ERROR([XenCtrl missing! Did you install Xen yet?])])
-AC_CHECK_LIB([xenctrl], 
-	[xc_interface_open, xc_memshr_control, xc_memshr_nominate_gfn, xc_memshr_share_gfns], 
+AC_CHECK_LIB([xenctrl],
+	[xc_interface_open, xc_monitor_debug_exceptions],
+	[], [AC_ERROR([XenCtrl is unusable! Do you have Xen 4.7 installed?])])
+
+# Check for memsharing
+AC_CHECK_LIB([xenctrl],
+	[xc_memshr_control, xc_memshr_nominate_gfn, xc_memshr_share_gfns],
 	[], [AC_ERROR([XenCtrl is unusable! Do you have Xen 4.2+ installed?])])
 
 AC_CHECK_LIB([xentoollog], [xtl_logger_destroy])
@@ -306,20 +329,23 @@ AC_CHECK_LIB([xentoollog], [xtl_logger_destroy])
 if test x$plugin_filedelete = xyes; then
     # Check for Python
     AM_PATH_PYTHON([2.7])
-    if test "xPYTHON" != "x"; then
+    if test "x$PYTHON" != "x"; then
         AC_DEFINE_UNQUOTED(PYTHON, "$PYTHON", "Python found")
+        AX_PYTHON_MODULE([pyvmi])
+
+        if test "x$HAVE_PYMOD_PYVMI" = "xyes"; then
+            AC_PATH_PROG(VOLATILITY, vol.py)
+
+            if test "x$VOLATILITY" != "x"; then
+                AC_DEFINE_UNQUOTED(VOLATILITY, "$VOLATILITY", "Volatility vol.py found")
+            else
+                plugin_filedelete="yes (log only)"
+            fi
+        else
+            plugin_filedelete="yes (log only)"
+        fi
     else
-        AC_ERROR([Python was not found on the system!])
-    fi
-
-    AX_PYTHON_MODULE([pyvmi], [fatal])
-
-    AC_PATH_PROG(VOLATILITY, vol.py)
-
-    if test "x$VOLATILITY" != "x"; then
-        AC_DEFINE_UNQUOTED(VOLATILITY, "$VOLATILITY", "Volatility vol.py found")
-    else
-        AC_ERROR([** Volatility vol.py was not found in your PATH!])
+        plugin_filedelete="yes (log only)"
     fi
 fi
 
@@ -327,6 +353,7 @@ fi
 
 AC_CONFIG_FILES([Makefile src/Makefile
                  src/libdrakvuf/Makefile
+                 src/libinjector/Makefile
                  src/xen_helper/Makefile
                  src/plugins/Makefile
                  src/dirwatch/Makefile
@@ -349,4 +376,5 @@ Filetracer: $plugin_filetracer
 Filedelete: $plugin_filedelete
 Objmon:     $plugin_objmon
 Exmon:      $plugin_exmon
+SSDTmon:    $plugin_ssdtmon
 -------------------------------------------------------------------------------])

@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -102,10 +102,13 @@
  *                                                                         *
  ***************************************************************************/
 
+#define XC_WANT_COMPAT_MAP_FOREIGN_API 1
+
 #include <stdlib.h>
 #include <xenctrl.h>
 #include <libxl_utils.h>
 #include <glib.h>
+#include <sys/mman.h>
 
 #include "xen_helper.h"
 
@@ -161,15 +164,15 @@ void xen_free_interface(xen_interface_t* xen) {
 int get_dom_info(xen_interface_t *xen, const char *input, domid_t *domID,
         char **name) {
 
-    uint32_t _domID = ~0;
+    uint32_t _domID = ~0U;
     char *_name = NULL;
 
     sscanf(input, "%u", &_domID);
 
-    if (_domID == ~0) {
+    if (_domID == ~0U) {
         _name = strdup(input);
         libxl_name_to_domid(xen->xl_ctx, input, &_domID);
-        if (!_domID || _domID == ~0) {
+        if (!_domID || _domID == ~0U) {
             printf("Domain is not running, failed to get domID from name!\n");
             free(_name);
             return -1;
@@ -179,6 +182,7 @@ int get_dom_info(xen_interface_t *xen, const char *input, domid_t *domID,
     } else {
 
         xc_dominfo_t info = { 0 };
+
         if ( 1 == xc_domain_getinfo(xen->xc, _domID, 1, &info)
             && info.domid == _domID)
         {
@@ -242,25 +246,36 @@ uint64_t xen_memshare(xen_interface_t *xen, domid_t domID, domid_t cloneID) {
     done: return shared;
 }
 
+void xen_unshare_gfn(xen_interface_t *xen, domid_t domID, unsigned long gfn) {
+    void *memory = xc_map_foreign_range(xen->xc, domID, XC_PAGE_SIZE, PROT_WRITE, gfn);
+    if(memory) munmap(memory, XC_PAGE_SIZE);
+}
+
 void print_sharing_info(xen_interface_t *xen, domid_t domID) {
 
-    xc_dominfo_t info;
+    xc_dominfo_t info = { 0 };
     xc_domain_getinfo(xen->xc, domID, 1, &info);
 
     printf("Shared memory pages: %lu\n", info.nr_shared_pages);
 }
 
-void xen_pause(xen_interface_t *xen, domid_t domID) {
-    xc_dominfo_t info = { 0 };
+/* Increments Xen's pause count if paused */
+bool xen_pause(xen_interface_t *xen, domid_t domID) {
+    int rc = xc_domain_pause(xen->xc, domID);
+    if ( rc < 0 )
+        return 0;
 
-    if (1 == xc_domain_getinfo(xen->xc, domID, 1, &info) && info.domid == domID && !info.paused)
-        xc_domain_pause(xen->xc, domID);
-
+   return 1;
 }
 
-void xen_unpause(xen_interface_t *xen, domid_t domID) {
+/* Decrements Xen's pause count and only resumes when it reaches 0 */
+void xen_resume(xen_interface_t *xen, domid_t domID) {
+    xc_domain_unpause(xen->xc, domID);
+}
+
+void xen_force_resume(xen_interface_t *xen, domid_t domID) {
     do {
-        xc_dominfo_t info = { 0 };
+        xc_dominfo_t info = {0};
 
         if (1 == xc_domain_getinfo(xen->xc, domID, 1, &info) && info.domid == domID && info.paused)
             xc_domain_unpause(xen->xc, domID);

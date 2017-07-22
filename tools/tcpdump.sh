@@ -1,6 +1,6 @@
 #********************IMPORTANT DRAKVUF LICENSE TERMS*********************#
 #                                                                        #
-# DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel. #
+# DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                 #
 # Tamas K Lengyel is hereinafter referred to as the author.              #
 # This program is free software; you may redistribute and/or modify it   #
 # under the terms of the GNU General Public License as published by the  #
@@ -113,8 +113,12 @@ DOMAIN=$1
 RUNFOLDER=$2
 RUNFILE=$3
 OUTPUTFOLDER=$4
-MD5=$(md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
+SHA256`=$(sha256sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
 
+<<<<<<< HEAD
 tcpdump -i vif$DOMAIN.0-emu -n -U -w $OUTPUTFOLDER/$MD5/tcpdump.pcap 1>/dev/null 2>&1
+=======
+tcpdump -i vif$DOMAIN.0-emu -n -U -w $OUTPUTFOLDER/$SHA256/tcpdump.pcap 1>/dev/null 2>&1
+>>>>>>> 85d378577801ac8cb7c634593f9cb81373fd34b6
 
 exit $?;

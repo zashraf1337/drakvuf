@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -110,7 +110,8 @@
 #include <stdio.h>
 #include <glib.h>
 
-#include "vmi.h"
+#include "private.h"
+#include "win-offsets.h"
 
 /* this should work for both 32 and 64bit */
 #define EX_FAST_REF_MASK    7
@@ -149,24 +150,22 @@ addr_t handle_table_get_entry(uint32_t bit, vmi_instance_t vmi,
         if (*handle_count == 0)
             break;
 
-        addr_t table_entry_addr = 0;
-        vmi_read_addr_va(vmi, table_base + i * table_entry_size, 0,
-                &table_entry_addr);
+        addr_t table_entry_addr;
+        if ( VMI_FAILURE == vmi_read_addr_va(vmi, table_base + i * table_entry_size, 0, &table_entry_addr) )
+            continue;
 
         // skip entries that point nowhere
-        if (table_entry_addr == 0) {
+        if (!table_entry_addr)
             continue;
-        }
 
         // real entries are further down the chain
         if (level > 0) {
-            addr_t next_level = 0;
-            vmi_read_addr_va(vmi, table_base + i * table_entry_size, 0,
-                    &next_level);
+            addr_t next_level;
+            if ( VMI_FAILURE == vmi_read_addr_va(vmi, table_base + i * table_entry_size, 0, &next_level) )
+                continue;
 
-            addr_t test = 0;
-            test = handle_table_get_entry(bit, vmi, next_level, level - 1,
-                    depth, handle_count, handle);
+            addr_t test = handle_table_get_entry(bit, vmi, next_level, level - 1,
+                                                 depth, handle_count, handle);
             if (test)
                 return test;
 
@@ -183,9 +182,8 @@ addr_t handle_table_get_entry(uint32_t bit, vmi_instance_t vmi,
         PRINT_DEBUG("\t\tHandle #: %u. Addr: 0x%lx. Value: 0x%x\n",
                     *handle_count, table_entry_addr & ~EX_FAST_REF_MASK, handle_value);
 
-        if (handle_value == handle) {
+        if (handle_value == handle)
             return table_entry_addr & ~EX_FAST_REF_MASK;
-        }
 
         // decrement the handle counter because we found one here
         --(*handle_count);
@@ -196,14 +194,17 @@ addr_t handle_table_get_entry(uint32_t bit, vmi_instance_t vmi,
 addr_t drakvuf_get_obj_by_handle(drakvuf_t drakvuf, addr_t process, uint64_t handle) {
 
     vmi_instance_t vmi = drakvuf->vmi;
-    addr_t handletable = 0, tablecode = 0;
-    vmi_read_addr_va(vmi, process + offsets[EPROCESS_OBJECTTABLE],
-                     0, &handletable);
-    vmi_read_addr_va(vmi, handletable, 0, &tablecode);
+    addr_t handletable, tablecode;
+    uint32_t handlecount;
 
-    uint32_t handlecount = 0;
-    vmi_read_32_va(vmi, handletable + offsets[HANDLE_TABLE_HANDLECOUNT],
-            0, &handlecount);
+    if ( VMI_FAILURE == vmi_read_addr_va(vmi, process + drakvuf->offsets[EPROCESS_OBJECTTABLE], 0, &handletable) )
+        return 0;
+
+    if ( VMI_FAILURE == vmi_read_addr_va(vmi, handletable, 0, &tablecode) )
+        return 0;
+
+    if ( VMI_FAILURE == vmi_read_32_va(vmi, handletable + drakvuf->offsets[HANDLE_TABLE_HANDLECOUNT], 0, &handlecount) )
+        return 0;
 
     // _EX_FAST_REF-style pointer, last three bits are used for storing the number of levels
     addr_t table_base = tablecode & ~EX_FAST_REF_MASK;
@@ -214,7 +215,7 @@ addr_t drakvuf_get_obj_by_handle(drakvuf_t drakvuf, addr_t process, uint64_t han
                 table_base, handlecount, handle);
 
     return handle_table_get_entry(PM2BIT(drakvuf->pm), vmi, table_base,
-            table_levels, table_depth, &handlecount, handle);
+                                  table_levels, table_depth, &handlecount, handle);
 }
 
 
@@ -238,7 +239,7 @@ bool drakvuf_obj_ref_by_handle( drakvuf_t drakvuf, drakvuf_trap_info_t *info, ad
         };
 
         // Get TypeIndex from _OBJ_HEADER...
-        ctx.addr = obj_addr + offsets[ OBJECT_HEADER_TYPEINDEX ] ;
+        ctx.addr = obj_addr + drakvuf->offsets[ OBJECT_HEADER_TYPEINDEX ] ;
 
         if ( vmi_read_8( drakvuf->vmi, &ctx, &object_type ) == VMI_SUCCESS )
         {
@@ -247,13 +248,13 @@ bool drakvuf_obj_ref_by_handle( drakvuf_t drakvuf, drakvuf_trap_info_t *info, ad
                 if ( object_type == OBJ_MANAGER_PROCESS_OBJECT )
                 {
                     // Object Body must be an _EPROCESS...
-                    ret = drakvuf_is_eprocess( drakvuf, info->regs->cr3, obj_addr + offsets[ OBJECT_HEADER_BODY ] );
+                    ret = drakvuf_is_eprocess( drakvuf, info->regs->cr3, obj_addr + drakvuf->offsets[ OBJECT_HEADER_BODY ] );
                 }
                 else
                 if ( object_type == OBJ_MANAGER_THREAD_OBJECT )
                 {
                     // Object Body must be an _ETHREAD...
-                    ret = drakvuf_is_ethread( drakvuf, info->regs->cr3, obj_addr + offsets[ OBJECT_HEADER_BODY ] );
+                    ret = drakvuf_is_ethread( drakvuf, info->regs->cr3, obj_addr + drakvuf->offsets[ OBJECT_HEADER_BODY ] );
                 }
                 else // Other object types...
                     ret = true ;
@@ -263,7 +264,7 @@ bool drakvuf_obj_ref_by_handle( drakvuf_t drakvuf, drakvuf_trap_info_t *info, ad
 
     if ( ret )
     {
-        *obj_body_addr = obj_addr + offsets[ OBJECT_HEADER_BODY ];
+        *obj_body_addr = obj_addr + drakvuf->offsets[ OBJECT_HEADER_BODY ];
     }
 
     return ret ;

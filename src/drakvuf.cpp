@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -128,6 +128,7 @@ static gpointer timer(gpointer data)
 int drakvuf_c::start_plugins(const bool* plugin_list, const char *dump_folder)
 {
     int i, rc;
+
     for(i=0;i<__DRAKVUF_PLUGIN_LIST_MAX;i++)
     {
         if (plugin_list[i]) {
@@ -166,11 +167,12 @@ drakvuf_c::drakvuf_c(const char* domain,
     this->interrupted = 0;
     this->timeout = timeout;
     this->rekall_profile = rekall_profile;
-    g_mutex_init(&this->loop_signal);
-    g_mutex_lock(&this->loop_signal);
 
     if (!drakvuf_init(&this->drakvuf, domain, rekall_profile, verbose))
         throw -1;
+
+    g_mutex_init(&this->loop_signal);
+    g_mutex_lock(&this->loop_signal);
 
     if(timeout > 0)
         this->timeout_thread = g_thread_new(NULL, timer, (void*)this);
@@ -181,6 +183,9 @@ drakvuf_c::drakvuf_c(const char* domain,
 
 void drakvuf_c::close()
 {
+    this->interrupted = -1;
+    g_mutex_trylock(&this->loop_signal);
+    g_mutex_unlock(&this->loop_signal);
     g_mutex_clear(&this->loop_signal);
 
     if (this->plugins)
@@ -226,10 +231,44 @@ void drakvuf_c::resume()
     drakvuf_resume(this->drakvuf);
 }
 
-int drakvuf_c::inject_cmd(vmi_pid_t injection_pid, const char *inject_cmd)
+int drakvuf_c::inject_cmd(vmi_pid_t injection_pid, uint32_t injection_tid, const char *inject_cmd)
 {
-    int rc = drakvuf_inject_cmd(this->drakvuf, injection_pid, inject_cmd);
+    int rc = injector_start_app(this->drakvuf, injection_pid, injection_tid, inject_cmd);
     if (!rc)
         fprintf(stderr, "Process startup failed\n");
     return rc;
 }
+
+#ifdef VOLATILITY
+#define VOL_PSTREE "%s %s -l vmi://domid/%u --profile=%s pstree 2>&1 --output-file=vol_pstree.out"
+#define PROFILE32 "Win7SP1x86"
+#define PROFILE64 "Win7SP1x64"
+
+void drakvuf_c::volatility_extract_process_tree() {
+
+    const char* profile = NULL;
+    fprintf(stderr, "dumping Process tree\n");
+
+    vmi_instance_t vmi = drakvuf_lock_and_get_vmi(this->drakvuf);
+
+    page_mode_t pm = vmi_get_page_mode(vmi);
+    uint32_t domid = vmi_get_vmid(vmi);
+
+    drakvuf_release_vmi(drakvuf);
+
+    if (pm == VMI_PM_IA32E)
+        profile = PROFILE64;
+    else
+        profile = PROFILE32;
+
+    char *command = (char *)g_malloc0(
+            snprintf(NULL, 0, VOL_PSTREE, PYTHON, VOLATILITY, domid,
+                     profile));
+    sprintf(command, VOL_PSTREE, PYTHON, VOLATILITY, domid, profile);
+            
+
+    g_spawn_command_line_sync(command, NULL, NULL, NULL, NULL);
+    g_free(command);
+}
+#endif
+

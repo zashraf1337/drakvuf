@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -140,9 +140,7 @@ static event_response_t cb(drakvuf_t drakvuf, drakvuf_trap_info_t *info) {
 
     objmon *o = (objmon *)info->trap->data;
     vmi_instance_t vmi = drakvuf_lock_and_get_vmi(drakvuf);
-    page_mode_t pm = vmi_get_page_mode(vmi);
     uint8_t index = ~0;
-    char *procname = drakvuf_get_current_process_name(drakvuf, info->vcpu, info->regs);
 
     access_context_t ctx;
     ctx.translate_mechanism = VMI_TM_PROCESS_DTB;
@@ -156,21 +154,20 @@ static event_response_t cb(drakvuf_t drakvuf, drakvuf_trap_info_t *info) {
         switch(o->format) {
         case OUTPUT_CSV:
         {
-            printf("objmon,%" PRIu32 ",0x%" PRIx64 ",%s,%s",
-                   info->vcpu, info->regs->cr3, procname, win7_typeindex[index]);
+            printf("objmon,%" PRIu32 ",0x%" PRIx64 ",%s,%" PRIi64 ",%s",
+                   info->vcpu, info->regs->cr3, info->procname, info->sessionid, win7_typeindex[index]);
             break;
         }
         default:
         case OUTPUT_DEFAULT:
-            printf("[OBJMON] vCPU:%" PRIu32 " CR3:0x%" PRIx64 ",%s %s",
-                   info->vcpu, info->regs->cr3, procname, win7_typeindex[index]);
+            printf("[OBJMON] vCPU:%" PRIu32 " CR3:0x%" PRIx64 ",%s SessionID:%" PRIi64" %s",
+                   info->vcpu, info->regs->cr3, info->procname, info->sessionid, win7_typeindex[index]);
             break;
         };
 
         printf("\n");
     }
 
-    free(procname);
     drakvuf_release_vmi(drakvuf);
     return 0;
 }
@@ -181,9 +178,9 @@ objmon::objmon(drakvuf_t drakvuf, const void *config, output_format_t output) {
     const char *rekall_profile = (const char *)config;
 
     if(VMI_FAILURE == drakvuf_get_function_rva(rekall_profile, "ObCreateObject", &this->trap.breakpoint.rva))
-        return;
+        throw -1;
     if (VMI_FAILURE==drakvuf_get_struct_member_rva(rekall_profile, "_OBJECT_HEADER", "TypeIndex", &this->typeindex_offset))
-        return;
+        throw -1;
 
     this->trap.cb = cb;
 
@@ -191,3 +188,5 @@ objmon::objmon(drakvuf_t drakvuf, const void *config, output_format_t output) {
     if ( !drakvuf_add_trap(drakvuf, &this->trap) )
         throw -1;
 }
+
+objmon::~objmon() {}

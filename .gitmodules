@@ -1,6 +1,15 @@
+<<<<<<< HEAD
 [submodule "cuckoo-modified"]
 	path = cuckoo-modified
 	url = https://github.com/zashraf1337/cuckoo-modified.git
 [submodule "cuckoomon-modified"]
 	path = cuckoomon-modified
 	url = https://github.com/zashraf1337/cuckoomon-modified.git
+=======
+[submodule "xen"]
+	path = xen
+	url = https://github.com/tklengyel/xen
+[submodule "libvmi"]
+	path = libvmi
+	url = https://github.com/tklengyel/libvmi
+>>>>>>> 85d378577801ac8cb7c634593f9cb81373fd34b6

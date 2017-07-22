@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -126,11 +126,13 @@ int get_dom_info(xen_interface_t *xen, const char *input, domid_t *domID,
 		char **name);
 
 uint64_t xen_memshare(xen_interface_t *xen, domid_t domID, domid_t cloneID);
+void xen_unshare_gfn(xen_interface_t *xen, domid_t domID, unsigned long gfn);
 
 void print_sharing_info(xen_interface_t *xen, domid_t domID);
 
-void xen_pause(xen_interface_t *xen, domid_t domID);
-void xen_unpause(xen_interface_t *xen, domid_t domID);
+bool xen_pause(xen_interface_t *xen, domid_t domID);
+void xen_resume(xen_interface_t *xen, domid_t domID);
+void xen_force_resume(xen_interface_t *xen, domid_t domID);
 
 
 #endif

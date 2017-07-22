@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -116,21 +116,24 @@
 #include <libvmi/events.h>
 
 #include "libdrakvuf.h"
+#include "vmi.h"
 #include "../xen_helper/xen_helper.h"
 
 #ifdef DRAKVUF_DEBUG
 
 extern bool verbose;
 
-#define PRINT_DEBUG(args...) \
+#define PRINT_DEBUG(...) \
     do { \
-        if(verbose) fprintf (stderr, args); \
+        if(verbose) fprintf (stderr, __VA_ARGS__); \
     } while (0)
 
 #else
-#define PRINT_DEBUG(args...) \
+#define PRINT_DEBUG(...) \
     do {} while(0)
 #endif
+
+#define UNUSED(x) (void)(x)
 
 struct drakvuf {
     char *dom_name;
@@ -146,7 +149,12 @@ struct drakvuf {
     GMutex vmi_lock;
     vmi_instance_t vmi;
 
+    vmi_event_t cr3_event;
+    vmi_event_t interrupt_event;
+    vmi_event_t mem_event;
     vmi_event_t *step_event[16];
+
+    size_t *offsets;
 
     // Processing trap removals in trap callbacks
     // is problematic so we save all such requests
@@ -160,17 +168,15 @@ struct drakvuf {
     unsigned int vcpus;
     unsigned int init_memsize;
     unsigned int memsize;
+    addr_t kernbase;
 
     GHashTable *remapped_gfns; // Key: gfn
                                // val: remapped gfn
 
-    GHashTable *guards;  // Key: gfn
-                         // val: vmi_event_t
-    GHashTable *guards2; // Key: gfn
-                         // val: vmi_event_t
-
     GHashTable *breakpoint_lookup_pa;   // key: PA of trap
                                         // val: struct breakpoint
+    GHashTable *breakpoint_lookup_gfn;  // key: gfn (size uint64_t)
+                                        // val: GSList of addr_t* for trap locations
     GHashTable *breakpoint_lookup_trap; // key: trap pointer
                                         // val: struct breakpoint
 
@@ -184,13 +190,15 @@ struct drakvuf {
 
 struct breakpoint {
     addr_t pa;
-    vmi_event_t *guard, *guard2;
+    drakvuf_trap_t guard, guard2;
+    bool doubletrap;
 } __attribute__ ((packed));
 
 struct memaccess {
     addr_t gfn;
     addr_t pa;
-    vmi_event_t *memtrap;
+    bool guard2;
+    vmi_mem_access_t access;
 } __attribute__ ((packed));
 
 struct wrapper {
@@ -206,12 +214,7 @@ struct wrapper {
 struct free_trap_wrapper {
     unsigned int counter;
     drakvuf_trap_t *trap;
-    void (*free_routine)(drakvuf_trap_t *trap);
-};
-
-struct memcb_pass {
-    drakvuf_t drakvuf;
-    addr_t gfn;
+    drakvuf_trap_free_t free_routine;
 };
 
 struct remapped_gfn {
@@ -219,5 +222,17 @@ struct remapped_gfn {
     xen_pfn_t r;
     bool active;
 };
+
+struct memcb_pass {
+    drakvuf_t drakvuf;
+    uint64_t gfn;
+    char *procname;
+    int64_t sessionid;
+    struct remapped_gfn *remapped_gfn;
+    vmi_mem_access_t access;
+    GSList *traps;
+};
+
+void drakvuf_force_resume (drakvuf_t drakvuf);
 
 #endif

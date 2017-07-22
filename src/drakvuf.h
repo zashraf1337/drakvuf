@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -115,7 +115,8 @@
 #include <glib.h>
 
 #include <libdrakvuf/libdrakvuf.h>
-#include "plugins/plugins.h"
+#include <plugins/plugins.h>
+#include <libinjector/libinjector.h>
 
 class drakvuf_c {
     private:
@@ -142,8 +143,11 @@ class drakvuf_c {
         void loop();
         void pause();
         void resume();
-        int inject_cmd(vmi_pid_t injection_pid, const char *inject_cmd);
+        int inject_cmd(vmi_pid_t injection_pid, uint32_t injection_tid, const char *inject_cmd);
         int start_plugins(const bool* plugin_list, const char *dump_folder);
+#ifdef VOLATILITY
+        void volatility_extract_process_tree(); 
+#endif
 };
 
 #endif

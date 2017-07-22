@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -107,8 +107,9 @@
 
 #include "libdrakvuf.h"
 #include "private.h"
-#include "vmi.h"
 #include "win-symbols.h"
+#include "win-exports.h"
+#include "win-offsets.h"
 
 #ifdef DRAKVUF_DEBUG
 bool verbose = 0;
@@ -118,16 +119,18 @@ void drakvuf_close(drakvuf_t drakvuf) {
     if (!drakvuf)
         return;
 
-    if (drakvuf->vmi)
+    if (drakvuf->vmi) {
         close_vmi(drakvuf);
+    }
 
     if (drakvuf->xen)
         xen_free_interface(drakvuf->xen);
 
+    g_free(drakvuf->offsets);
     g_mutex_clear(&drakvuf->vmi_lock);
-    free(drakvuf->dom_name);
-    free(drakvuf->rekall_profile);
-    free(drakvuf);
+    g_free(drakvuf->dom_name);
+    g_free(drakvuf->rekall_profile);
+    g_free(drakvuf);
 }
 
 bool drakvuf_init(drakvuf_t *drakvuf, const char *domain, const char *rekall_profile, bool _verbose) {
@@ -151,6 +154,8 @@ bool drakvuf_init(drakvuf_t *drakvuf, const char *domain, const char *rekall_pro
     domid_t test = ~0;
     if ( (*drakvuf)->domID == test )
         goto err;
+
+    (*drakvuf)->offsets = g_malloc0(sizeof(addr_t) * OFFSET_MAX);
 
     if (!init_vmi(*drakvuf))
         goto err;
@@ -200,7 +205,7 @@ bool inject_trap_breakpoint(drakvuf_t drakvuf, drakvuf_trap_t *trap) {
                 if( !drakvuf_find_eprocess(drakvuf, pid, name, &process_base) )
                     return 0;
 
-               if(pid == ~0 && VMI_FAILURE == vmi_read_32_va(drakvuf->vmi, process_base + offsets[EPROCESS_PID], 0, (uint32_t*)&pid))
+               if(pid == ~0 && VMI_FAILURE == vmi_read_32_va(drakvuf->vmi, process_base + drakvuf->offsets[EPROCESS_PID], 0, (uint32_t*)&pid))
                     return 0;
 
                if( !drakvuf_get_module_list(drakvuf, process_base, &module_list) )
@@ -224,7 +229,21 @@ bool inject_trap_breakpoint(drakvuf_t drakvuf, drakvuf_trap_t *trap) {
 
         if(trap->breakpoint.addr_type == ADDR_PA) {
             fprintf(stderr, "DRAKVUF Trap misconfiguration: PID lookup specified for PA location\n");
+            return 0;
         }
+    }
+
+    if(trap->breakpoint.lookup_type == LOOKUP_DTB) {
+        if(trap->breakpoint.addr_type == ADDR_VA) {
+            addr_t trap_pa = vmi_pagetable_lookup(drakvuf->vmi, trap->breakpoint.dtb, trap->breakpoint.addr);
+            PRINT_DEBUG("Breakpoint VA 0x%" PRIx64" -> PA 0x%" PRIx64 "\n", trap->breakpoint.addr, trap_pa);
+            if (!trap_pa)
+                return 0;
+
+            return inject_trap_pa(drakvuf, trap, trap_pa);
+        }
+
+        //TODO: ADDR_RVA
     }
 
     return 0;
@@ -243,39 +262,39 @@ bool inject_trap_reg(drakvuf_t drakvuf, drakvuf_trap_t *trap) {
 
 bool drakvuf_add_trap(drakvuf_t drakvuf, drakvuf_trap_t *trap) {
 
-    bool ret = 0;
-    vmi_pause_vm(drakvuf->vmi);
+    bool ret;
 
     if (!trap)
-        goto done;
+        return 0;
 
     if(g_hash_table_lookup(drakvuf->remove_traps, &trap)) {
         g_hash_table_remove(drakvuf->remove_traps, &trap);
-        ret = 1;
-        goto done;
+        return 1;
     }
+
+    drakvuf_pause(drakvuf);
 
     switch(trap->type) {
         case BREAKPOINT:
             ret = inject_trap_breakpoint(drakvuf, trap);
             break;
         case MEMACCESS:
-            ret = inject_trap_mem(drakvuf, trap);
+            ret = inject_trap_mem(drakvuf, trap, 0);
             break;
         case REGISTER:
             ret = inject_trap_reg(drakvuf, trap);
             break;
         default:
+            ret = 0;
             break;
     }
 
-done:
-    vmi_resume_vm(drakvuf->vmi);
+    drakvuf_resume(drakvuf);
     return ret;
 }
 
 void drakvuf_remove_trap(drakvuf_t drakvuf, drakvuf_trap_t *trap,
-                         void(*free_routine)(drakvuf_trap_t *trap))
+                         drakvuf_trap_free_t free_routine)
 {
     if ( drakvuf->in_callback) {
         struct free_trap_wrapper *free_wrapper =
@@ -312,7 +331,11 @@ void drakvuf_pause (drakvuf_t drakvuf) {
 }
 
 void drakvuf_resume (drakvuf_t drakvuf) {
-    xen_unpause(drakvuf->xen, drakvuf->domID);
+    xen_resume(drakvuf->xen, drakvuf->domID);
+}
+
+void drakvuf_force_resume (drakvuf_t drakvuf) {
+    xen_force_resume(drakvuf->xen, drakvuf->domID);
 }
 
 status_t drakvuf_get_struct_size(const char *rekall_profile,
@@ -359,13 +382,13 @@ bool drakvuf_get_module_base_addr( drakvuf_t drakvuf, addr_t module_list_head, c
 
         base_addr = 0 ;
 
-        if ( vmi_read_addr_va( vmi, next_module + offsets[LDR_DATA_TABLE_ENTRY_DLLBASE], 4, &base_addr ) != VMI_SUCCESS )
+        if ( vmi_read_addr_va( vmi, next_module + drakvuf->offsets[LDR_DATA_TABLE_ENTRY_DLLBASE], 4, &base_addr ) != VMI_SUCCESS )
             break;
 
         if ( ! base_addr )
             break;
 
-        unicode_string_t *us = vmi_read_unicode_str_va( vmi, next_module + offsets[LDR_DATA_TABLE_ENTRY_BASEDLLNAME], 4 );
+        unicode_string_t *us = vmi_read_unicode_str_va( vmi, next_module + drakvuf->offsets[LDR_DATA_TABLE_ENTRY_BASEDLLNAME], 4 );
 
         if ( us )
         {
@@ -389,4 +412,19 @@ bool drakvuf_get_module_base_addr( drakvuf_t drakvuf, addr_t module_list_head, c
     }
 
     return false ;
+}
+
+
+const char *drakvuf_get_rekall_profile(drakvuf_t drakvuf) {
+    return drakvuf->rekall_profile;
+}
+
+addr_t drakvuf_exportsym_to_va(drakvuf_t drakvuf, addr_t eprocess_addr,
+                               const char *module, const char *sym)
+{
+    return eprocess_sym2va(drakvuf, eprocess_addr, module, sym);
+}
+
+addr_t drakvuf_get_kernel_base(drakvuf_t drakvuf) {
+    return drakvuf->kernbase;
 }

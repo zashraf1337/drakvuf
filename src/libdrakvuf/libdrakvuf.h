@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -137,6 +137,9 @@ void drakvuf_free_symbols(symbols_t *symbols);
 status_t drakvuf_get_function_rva(const char *rekall_profile,
                                   const char *function,
                                   addr_t *rva);
+status_t drakvuf_get_constant_rva(const char *rekall_profile,
+                                  const char *constant,
+                                  addr_t *rva);
 status_t drakvuf_get_struct_size(const char *rekall_profile,
                                  const char *struct_name,
                                  size_t *size);
@@ -184,6 +187,8 @@ typedef struct drakvuf_trap drakvuf_trap_t;
 typedef struct drakvuf_trap_info {
     unsigned int vcpu;
     uint16_t altp2m_idx;
+    const char* procname; /* Currently executing process' name */
+    int64_t sessionid; /* Currently executing process' SessionID */
     addr_t trap_pa;
     x86_registers_t *regs;
     drakvuf_trap_t *trap;
@@ -247,6 +252,7 @@ typedef enum object_manager_object {
 
 ////////////////////////////////////////////////////////////////////////////
 
+typedef void (*drakvuf_trap_free_t)(drakvuf_trap_t *trap);
 
 bool drakvuf_init (drakvuf_t *drakvuf,
                    const char *domain,
@@ -257,13 +263,10 @@ bool drakvuf_add_trap(drakvuf_t drakvuf,
                       drakvuf_trap_t *trap);
 void drakvuf_remove_trap (drakvuf_t drakvuf,
                           drakvuf_trap_t *trap,
-                          void(*free_routine)(drakvuf_trap_t *trap));
+                          drakvuf_trap_free_t free_routine);
 void drakvuf_loop (drakvuf_t drakvuf);
 void drakvuf_interrupt (drakvuf_t drakvuf,
                         int sig);
-int drakvuf_inject_cmd (drakvuf_t drakvuf,
-                        vmi_pid_t pid,
-                        const char *cmd);
 void drakvuf_pause (drakvuf_t drakvuf);
 void drakvuf_resume (drakvuf_t drakvuf);
 
@@ -273,6 +276,10 @@ void drakvuf_release_vmi(drakvuf_t drakvuf);
 addr_t drakvuf_get_obj_by_handle(drakvuf_t drakvuf,
                                  addr_t process,
                                  uint64_t handle);
+
+const char *drakvuf_get_rekall_profile(drakvuf_t drakvuf);
+
+addr_t drakvuf_get_kernel_base(drakvuf_t drakvuf);
 
 /*
  * Specify either vcpu_id and/or regs. If regs don't have the required info
@@ -289,14 +296,18 @@ addr_t drakvuf_get_current_thread(drakvuf_t drakvuf,
 /* Caller must free the returned string */
 char *drakvuf_get_process_name(drakvuf_t drakvuf,
                                addr_t eprocess_base);
-char *drakvuf_get_current_process_name(drakvuf_t drakvuf,
-                                       uint64_t vcpu_id,
-                                       const x86_registers_t *regs);
+
+/* Process SessionID or -1 on error */
+int64_t drakvuf_get_process_sessionid(drakvuf_t drakvuf,
+                                      addr_t eprocess_base);
 
 bool drakvuf_get_current_thread_id(drakvuf_t drakvuf,
                                     uint64_t vcpu_id,
                                     const x86_registers_t *regs,
                                     uint32_t *thread_id);
+
+addr_t drakvuf_exportsym_to_va(drakvuf_t drakvuf, addr_t eprocess_addr,
+                               const char *module, const char *sym);
 
 // Microsoft PreviousMode KTHREAD explanation:
 // https://msdn.microsoft.com/en-us/library/windows/hardware/ff559860(v=vs.85).aspx

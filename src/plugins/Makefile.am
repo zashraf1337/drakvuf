@@ -1,6 +1,6 @@
 #********************IMPORTANT DRAKVUF LICENSE TERMS**********************#
 #                                                                         #
-# DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  #
+# DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  #
 # Tamas K Lengyel is hereinafter referred to as the author.               #
 # This program is free software; you may redistribute and/or modify it    #
 # under the terms of the GNU General Public License as published by the   #
@@ -100,7 +100,7 @@
 # DRAKVUF, and also available from                                        #
 # https://github.com/tklengyel/drakvuf/COPYING)                           #
 #                                                                         #
-#*************************************************************************# 
+#*************************************************************************#
 
 sources =
 
@@ -130,6 +130,9 @@ if PLUGIN_EXMON
 sources += exmon/exmon.cpp
 endif
 
+if PLUGIN_SSDTMON
+sources += ssdtmon/ssdtmon.cpp
+endif
 
 ###############################################################################
 sources += plugins.cpp plugins.h
@@ -146,8 +149,8 @@ AM_CPPFLAGS += $(HARDEN_CFLAGS) -DHARDENING
 
 # Note that -pg is incompatible with HARDENING
 if DEBUG
-AM_CPPFLAGS += -DDRAKVUF_DEBUG -Wall -Wextra -Wno-strict-aliasing -g -ggdb3
-AM_CPPFLAGS += -Wno-unused-parameter -Wno-unused-variable
+AM_CPPFLAGS += -DDRAKVUF_DEBUG -Werror -Wall -Wextra -g -ggdb3
+AM_CPPFLAGS += -Wno-missing-field-initializers -Wno-unused-parameter
 if !HARDENING
 AM_CPPFLAGS += -pg
 endif

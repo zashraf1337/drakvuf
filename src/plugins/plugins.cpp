@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -110,6 +110,7 @@
 #include "filedelete/filedelete.h"
 #include "objmon/objmon.h"
 #include "exmon/exmon.h"
+#include "ssdtmon/ssdtmon.h"
 
 drakvuf_plugins::drakvuf_plugins(const drakvuf_t drakvuf, output_format_t output)
 {
@@ -161,6 +162,11 @@ bool drakvuf_plugins::start(const drakvuf_plugin_t plugin_id,
 #ifdef ENABLE_PLUGIN_EXMON
         case PLUGIN_EXMON:
             this->plugins[plugin_id] = new exmon(this->drakvuf, config, this->output);
+            break;
+#endif
+#ifdef ENABLE_PLUGIN_SSDTMON
+        case PLUGIN_SSDTMON:
+            this->plugins[plugin_id] = new ssdtmon(this->drakvuf, config, this->output);
             break;
 #endif
         default:

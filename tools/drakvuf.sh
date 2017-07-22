@@ -1,5 +1,11 @@
+<<<<<<< HEAD
 #********************IMPORTANT DRAKVUF LICENSE TERMS*********************# #                                                                        #
 # DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel. #
+=======
+#********************IMPORTANT DRAKVUF LICENSE TERMS*********************#
+#                                                                        #
+# DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                 #
+>>>>>>> 85d378577801ac8cb7c634593f9cb81373fd34b6
 # Tamas K Lengyel is hereinafter referred to as the author.              #
 # This program is free software; you may redistribute and/or modify it   #
 # under the terms of the GNU General Public License as published by the  #
@@ -114,6 +120,7 @@ VLAN=$4
 RUNFOLDER=$5
 RUNFILE=$6
 OUTPUTFOLDER=$7
+<<<<<<< HEAD
 MD5=$(md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
 
 echo -n "   drakvuf.sh md5 of $RUNFOLDER/$RUNFILE got $MD5 - "
@@ -121,13 +128,28 @@ echo `md5sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}'`
 #CMD="cmd.exe /k \"dir \"C:\\Users\\John Smith\\Desktop\\test.exe\" \""
 CMD="\"C:\\Users\\John Smith\\Desktop\\test.exe\""
 #CMD="\"C:\\Windows\\system32\\cmd.exe\""
+=======
+SHA256sum=$(sha256sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}')
+>>>>>>> 85d378577801ac8cb7c634593f9cb81373fd34b6
 
-drakvuf -r $REKALL -d $DOMAIN -i $PID -e "$CMD" -D $OUTPUTFOLDER/$MD5 -o csv -t 60 1>$OUTPUTFOLDER/$MD5/drakvuf.log 2>&1
+echo -n "   drakvuf.sh SHA256sum of $RUNFOLDER/$RUNFILE got $SHA256sum - "
+echo `sha256sum $RUNFOLDER/$RUNFILE | awk -F" " '{print $1}'`
+#CMD="cmd.exe /k \"dir \"C:\\Users\\John Smith\\Desktop\\test.exe\" \""
+CMD="\"C:\\Users\\John Smith\\Desktop\\test.exe\""
+#CMD="\"C:\\Windows\\system32\\cmd.exe\""
+
+mkdir $OUTPUTFOLDER/$SHA256sum/files
+
+drakvuf -r $REKALL -d $DOMAIN -i $PID -e "$CMD" -D $OUTPUTFOLDER/$SHA256sum/files -o csv -t 500 -x exmon  -x objmon -x poolmon -x syscalls 1>$OUTPUTFOLDER/$SHA256sum/drakvuf.log 2>$OUTPUTFOLDER/$SHA256sum/drakvuf.err.log
 
 RET=$?
 
 if [ $RET -eq 1 ]; then
+<<<<<<< HEAD
    mv $RUNFOLDER/$RUNFILE $OUTPUTFOLDER/$MD5 1>/dev/null 2>&1
+=======
+   mv $RUNFOLDER/$RUNFILE $OUTPUTFOLDER/$SHA256sum 1>/dev/null 2>&1
+>>>>>>> 85d378577801ac8cb7c634593f9cb81373fd34b6
 fi
 
 TCPDUMPPID=$(ps aux | grep "tcpdump -i vif$DOMAIN.0-emu" | grep -v grep | awk -F" " '{print $2}')

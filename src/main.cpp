@@ -1,6 +1,6 @@
 /*********************IMPORTANT DRAKVUF LICENSE TERMS***********************
  *                                                                         *
- * DRAKVUF Dynamic Malware Analysis System (C) 2014-2016 Tamas K Lengyel.  *
+ * DRAKVUF (C) 2014-2016 Tamas K Lengyel.                                  *
  * Tamas K Lengyel is hereinafter referred to as the author.               *
  * This program is free software; you may redistribute and/or modify it    *
  * under the terms of the GNU General Public License as published by the   *
@@ -127,14 +127,14 @@ static inline void disable_plugin(char *optarg, bool *plugin_list) {
 }
 
 int main(int argc, char** argv) {
-    int c, i, rc = 0, timeout = 0;
+    int c, rc = 0, timeout = 0;
     char *inject_cmd = NULL;
     char *domain = NULL;
     char *rekall_profile = NULL;
     char *dump_folder = NULL;
     vmi_pid_t injection_pid = -1;
+    uint32_t injection_thread = 0;
     struct sigaction act;
-    GThread *timeout_thread = NULL;
     output_format_t output = OUTPUT_DEFAULT;
     bool plugin_list[] = {[0 ... __DRAKVUF_PLUGIN_LIST_MAX-1] = 1};
     bool verbose = 0;
@@ -152,11 +152,14 @@ int main(int argc, char** argv) {
                "\t -d <domain ID or name>    The domain's ID or name\n"
                "Optional inputs:\n"
                "\t -i <injection pid>        The PID of the process to hijack for injection\n"
+               "\t -I <injection thread>     The ThreadID in the process to hijack for injection (requires -i)\n"
                "\t -e <inject_exe>           The executable to start with injection\n"
                "\t -t <timeout>              Timeout (in seconds)\n"
-               "\t -D <file dump folder>     Folder where extracted files should be stored at\n"
                "\t -o <format>               Output format (default or csv)\n"
                "\t -x <plugin>               Don't activate the specified plugin\n"
+#ifdef VOLATILITY
+               "\t -D <file dump folder>     Folder where extracted files should be stored at\n"
+#endif
 #ifdef DRAKVUF_DEBUG
                "\t -v                        Turn on verbose (debug) output\n"
 #endif
@@ -164,7 +167,7 @@ int main(int argc, char** argv) {
         return rc;
     }
 
-    while ((c = getopt (argc, argv, "r:d:i:e:t:D:o:vx:")) != -1)
+    while ((c = getopt (argc, argv, "r:d:i:I:e:t:D:o:vx:")) != -1)
     switch (c)
     {
     case 'r':
@@ -175,6 +178,9 @@ int main(int argc, char** argv) {
         break;
     case 'i':
         injection_pid = atoi(optarg);
+        break;
+    case 'I':
+        injection_thread = atoi(optarg);
         break;
     case 'e':
         inject_cmd = optarg;
@@ -228,8 +234,8 @@ int main(int argc, char** argv) {
     sigaction(SIGINT, &act, NULL);
     sigaction(SIGALRM, &act, NULL);
 
-    if ( injection_pid && inject_cmd ) {
-        rc = drakvuf->inject_cmd(injection_pid, inject_cmd);
+    if ( injection_pid > 0 && inject_cmd ) {
+        rc = drakvuf->inject_cmd(injection_pid, injection_thread, inject_cmd);
         if (!rc)
             goto exit;
     }
@@ -240,6 +246,7 @@ int main(int argc, char** argv) {
 
     /* Start the event listener */
     drakvuf->loop();
+    drakvuf->volatility_extract_process_tree();
     rc = 1;
 
 exit:
